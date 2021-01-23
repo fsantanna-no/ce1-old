@@ -111,6 +111,7 @@ native _{
     #define TK_BUF 1024
     typedef char Str_Buf[TK_BUF];
     typedef char Err_Buf[ERR_BUF];
+    typedef char* String;
 }
 
 type TK_Val {
@@ -414,6 +415,11 @@ func lexer: () -> () {
 
 -------------------------------------------------------------------------------
 
+func err_tk: ((Int,TK_Val,Int,Int),_String) -> () {
+    native _{ sprintf(err, "(ln %d, col %d): %s",
+        arg._1._3, arg._1._4, arg._2); }
+}
+
 func err_expected: _(const char*) -> () {
     native _{ sprintf(err, "(ln %d, col %d): expected %s : have %s",
         tk1._3, tk1._4, arg, lexer_tk2str(tk1)); }
@@ -533,7 +539,7 @@ func parser_type: () -> Maybe_Type {
         return ret
     } else {
         -- TYPE_FUNC
-        if accept _(TK_ARROW) {
+        if accept _TK_ARROW {
             var out: Maybe_Type = call parser_type ()
             if out.None_Type? {
                 return None_Type
@@ -584,9 +590,29 @@ func parser_expr_: () -> Maybe_Expr {
         return Some_Expr Expr_Var tk0
     }
 
-    -- EXPR_VAR
+    -- EXPR_NATIVE
     if accept _TX_NATIVE {
         return Some_Expr Expr_Native tk0
+    }
+
+    -- EXPR_UPREF
+    if accept _('\\') {
+        var tk: (Int,TK_Val,Int,Int) = tk0
+        var e: Maybe_Expr = parser_expr False
+        if e.None_Expr? {
+            return None_Expr
+        }
+        var ok: Bool = or (e.Some_Expr!.Expr_Native?,
+                       or (e.Some_Expr!.Expr_Var?,
+                       or (e.Some_Expr!.Expr_Index?, False)))
+                       --or (e.Some_Expr!.Expr_Disc?, False)))))))
+        if ok {
+            return Some_Expr Expr_Upref e.Some_Expr!
+        } else {
+            var str: _String = _("unexpected operand to `\\´")
+            call err_tk (tk0,str)
+            return None_Expr
+        }
     }
 
     -- EXPR_PARENS / EXPR_TUPLE
@@ -628,7 +654,7 @@ func parser_expr_: () -> Maybe_Expr {
     }
 
     -- EXPR_CONS
-    if accept _(TX_USER) {
+    if accept _TX_USER {
         var sub: (Int,TK_Val,Int,Int) = tk0
         var e: Maybe_Expr = parser_expr False
         if e.None_Expr? {
@@ -644,7 +670,7 @@ func parser_expr_: () -> Maybe_Expr {
 }
 
 func parser_expr: Bool -> Maybe_Expr {
-    var ispre: Bool = and (arg, accept _(TK_CALL))
+    var ispre: Bool = and (arg, accept _TK_CALL)
 
     var ret: Maybe_Expr = parser_expr_ ()
     if ret.None_Expr? {
@@ -657,7 +683,7 @@ func parser_expr: Bool -> Maybe_Expr {
 
         if accept _('.') {
             -- EXPR_INDEX
-            if accept _(TX_NUM) {
+            if accept _TX_NUM {
                 var tmp: Expr = Expr_Index (ret.Some_Expr!,tk0)
                 set ret = Some_Expr tmp
             } else {
@@ -678,7 +704,8 @@ func parser_expr: Bool -> Maybe_Expr {
                     var tmp: Expr = Expr_Dnref ret.Some_Expr!
                     set ret = Some_Expr tmp
                 } else {
-                    call err_expected _("unexpected operand to `\\´")
+                    var str: _String = _("unexpected operand to `\\´")
+                    call err_tk (tk0,str)
                     return None_Expr
                 }
             } else {
@@ -1107,7 +1134,40 @@ func t_parser_expr: () -> () {
         call _assert _{ok.sub && !strcmp(err,"(ln 1, col 5): expected index or subtype : have `.´")}
         call close ()
     }
-    -- EXPR_UPREF, EXPR_DNREF
+    -- EXPR_DNREF
+    {
+        call open _{"x\\.1"}
+        var e: Maybe_Expr = call parser_expr True
+        var idx: (Expr,(Int,TK_Val,Int,Int)) = e.Some_Expr!.Expr_Index!
+        var dn:  Expr = idx.1.Expr_Dnref!
+        var str: _(char*) = dn.Expr_Var!.2.Str!
+        call _assert _{!strcmp(str,"x")}
+        call close ()
+    }
+    {
+        call open _{"()\\"}
+        var e: Maybe_Expr = call parser_expr True
+        var ok: Bool = e.None_Expr?
+        call _assert _{ok.sub && !strcmp(err,"(ln 1, col 3): unexpected operand to `\\´")}
+        call close ()
+    }
+    -- EXPR_UPREF
+    {
+        call open _{"\\x.1"}
+        var e: Maybe_Expr = call parser_expr True
+        var up: Expr = e.Some_Expr!.Expr_Upref!
+        var idx: (Expr,(Int,TK_Val,Int,Int)) = up.Expr_Index!
+        var str: _(char*) = idx.1.Expr_Var!.2.Str!
+        call _assert _{!strcmp(str,"x")}
+        call close ()
+    }
+    {
+        call open _{"\\()"}
+        var e: Maybe_Expr = call parser_expr True
+        var ok: Bool = e.None_Expr?
+        call _assert _{ok.sub && !strcmp(err,"(ln 1, col 2): unexpected operand to `\\´")}
+        call close ()
+    }
 }
 
 call t_lexer  ()
