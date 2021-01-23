@@ -562,6 +562,8 @@ type rec Expr {                             -- CE2: subtype isrec=Bool
     Expr_Call:   (Expr,Expr)
     Expr_Cons:   ((Int,TK_Val,Int,Int),Expr)
     Expr_Index:  (Expr,(Int,TK_Val,Int,Int))
+    Expr_Upref:  Expr
+    Expr_Dnref:  Expr
 }
 
 type Maybe_Expr {
@@ -652,7 +654,6 @@ func parser_expr: Bool -> Maybe_Expr {
     -- EXPR_INDEX / EXPR_DISC / EXPR_PRED / EXPR_CALL
     loop {
         var tk_bef: (Int,TK_Val,Int,Int) = tk0
-        var ok: Bool = False
 
         if accept _('.') {
             -- EXPR_INDEX
@@ -663,25 +664,26 @@ func parser_expr: Bool -> Maybe_Expr {
                 call err_expected _("index or subtype")
                 return None_Expr
             }
-            set ok = True
-        }
+        } else {
 
-        -- EXPR_CALL
-        if or (ret.Some_Expr!.Expr_Var?, ret.Some_Expr!.Expr_Native?) {
-            var tk_bef: (Int,TK_Val,Int,Int) = tk0
-            var e: Maybe_Expr = parser_expr False
-            if e.Some_Expr? {
-                var tmp: Expr = Expr_Call (ret.Some_Expr!, e.Some_Expr!)
-                set ret = Some_Expr tmp
-                set ok = True
+            -- EXPR_CALL
+            var ok: Bool = False
+            if or (ret.Some_Expr!.Expr_Var?, ret.Some_Expr!.Expr_Native?) {
+                var tk_bef: (Int,TK_Val,Int,Int) = tk0
+                var e: Maybe_Expr = parser_expr False
+                if e.Some_Expr? {
+                    var tmp: Expr = Expr_Call (ret.Some_Expr!, e.Some_Expr!)
+                    set ret = Some_Expr tmp
+                    set ok = True
+                }
             }
-        }
 
-        if not ok {
-            if asbool _(tk_bef._3==tk0._3 && tk_bef._4==tk0._4) {
-                break               -- nothing extra read: OK!
-            } else {
-                return None_Expr    -- extra token read:   NO!
+            if not ok {
+                if asbool _(tk_bef._3==tk0._3 && tk_bef._4==tk0._4) {
+                    break               -- nothing extra read: OK!
+                } else {
+                    return None_Expr    -- extra token read:   NO!
+                }
             }
         }
     }
@@ -1088,6 +1090,7 @@ func t_parser_expr: () -> () {
         call _assert _{ok.sub && !strcmp(err,"(ln 1, col 5): expected index or subtype : have `.´")}
         call close ()
     }
+    -- EXPR_UPREF, EXPR_DNREF
 }
 
 call t_lexer  ()
