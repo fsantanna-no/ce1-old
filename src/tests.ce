@@ -135,7 +135,7 @@ func is_reserved: \TK_Val -> Int {
 var inp: _(FILE*) = ?
 var lin: Int = ?
 var col: Int = ?
-var tk0: (Int,TK_Val,Int,Int) = ?   -- enu, val, lin, col
+var tk0: (Int,TK_Val,Int,Int) = ?   -- enu, val, lin, col   // CE2: typedef
 var tk1: (Int,TK_Val,Int,Int) = ?   -- enu, val, lin, col
 var err: _Err_Buf = ?
 
@@ -449,11 +449,11 @@ func close: () -> () {
 
 type pre Type
 
-type rec List_Type {
+type rec List_Type {                        -- CE2: generic
     Item_Type: (Type, List_Type)
 }
 
-type rec Type {                             -- CE1: subtype isrec=Bool
+type rec Type {                             -- CE2: subtype isrec=Bool
     Type_Any:    Bool
     Type_Unit:   Bool
     Type_Native: (Bool, (Int,TK_Val,Int,Int))
@@ -462,7 +462,7 @@ type rec Type {                             -- CE1: subtype isrec=Bool
     Type_Func:   (Bool, Type, Type)
 }
 
-type Maybe_Type {
+type Maybe_Type {                           -- CE2: generic
     None_Type: ()
     Some_Type: Type
 }
@@ -498,7 +498,7 @@ func parser_type: () -> Maybe_Type {
                 return None_Type
             }
 
-            -- TYPE_TUPLE
+            -- TYPE_TUPLE   // CE2: generic w/ EXPR_TUPLE
             var lst: List_Type = Item_Type (tmp.Some_Type!, $List_Type)
             {
                 var cur: \List_Type = \lst.Item_Type!.2
@@ -552,7 +552,7 @@ type rec List_Expr {
     Item_Expr: (Expr, List_Expr)
 }
 
-type rec Expr {                             -- CE1: subtype isrec=Bool
+type rec Expr {                             -- CE2: subtype isrec=Bool
     Expr_Unit:   (Int,TK_Val,Int,Int)
     Expr_Var:    (Int,TK_Val,Int,Int)
     Expr_Native: (Int,TK_Val,Int,Int)
