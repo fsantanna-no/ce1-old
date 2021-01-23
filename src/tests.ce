@@ -401,67 +401,91 @@ func err_expected: _(const char*) -> () {
         tk1._3, tk1._4, arg, lexer_tk2str(tk1)); }
 }
 
-func init: _(char*) -> () {
+func open: _(char*) -> () {
     set inp = _(stropen("r", 0, arg))
     set lin = 1;
     set col = 1;
     call lexer ()
 }
 
+func close: () -> () {
+    call _fclose inp
+}
+
 -------------------------------------------------------------------------------
 
 func parser_type: () -> Maybe_Type {
 --native _{ printf(">>> %d\n", tk1._1); }
-    var isalias: Bool = call accept _('\\')
 
-    -- TYPE_UNIT
-    if accept _TK_UNIT {
-        return Type_Some Type_Unit isalias
-    }
+    func one: () -> Maybe_Type {
+        var isalias: Bool = call accept _('\\')
 
-    -- TYPE_NATIVE
-    if accept _TX_NATIVE {
-        return Type_Some Type_Native (isalias, tk0)
-    }
-
-    -- TYPE_PARENS / TYPE_TUPLE
-    if accept _{'('} {
-        var tmp: Maybe_Type = call parser_type ()
-        if tmp.Type_None? {
-            return Type_None
+        -- TYPE_UNIT
+        if accept _TK_UNIT {
+            return Type_Some Type_Unit isalias
         }
 
-        -- TYPE_PARENS
-        if accept _{')'} {
-            return tmp
+        -- TYPE_NATIVE
+        if accept _TX_NATIVE {
+            return Type_Some Type_Native (isalias, tk0)
         }
 
-        -- TYPE_TUPLE
-        var lst: List_Type = Item_Type (tmp.Type_Some!, $List_Type)
-        {
-            var cur: \List_Type = \lst
-            loop {
-                if not accept _(',') {
-                    break
-                }
-                var tmp: Maybe_Type = call parser_type ()
-                if tmp.Type_None? {
-                    return Type_None
-                }
-                set cur\.Item_Type! = (tmp.Type_Some!, $List_Type)
-                set cur = \cur\.Item_Type!.2
+        -- TYPE_PARENS / TYPE_TUPLE
+        if accept _{'('} {
+            var tmp: Maybe_Type = call parser_type ()
+            if tmp.Type_None? {
+                return Type_None
             }
+
+            -- TYPE_PARENS
+            if accept _{')'} {
+                return tmp
+            }
+
+            -- TYPE_TUPLE
+            var lst: List_Type = Item_Type (tmp.Type_Some!, $List_Type)
+            {
+                var cur: \List_Type = \lst
+                loop {
+                    if not accept _(',') {
+                        break
+                    }
+                    var tmp: Maybe_Type = call parser_type ()
+                    if tmp.Type_None? {
+                        return Type_None
+                    }
+                    set cur\.Item_Type! = (tmp.Type_Some!, $List_Type)
+                    set cur = \cur\.Item_Type!.2
+                }
+            }
+
+            if not accept _{')'} {
+                return Type_None
+            }
+
+            return Type_Some Type_Tuple (isalias,lst)
         }
 
-        if not accept _{')'} {
-            return Type_None
-        }
-
-        return Type_Some Type_Tuple (isalias,lst)
+        call err_expected _("type")
+        return Type_None
     }
 
-    call err_expected _("type")
-    return Type_None
+    var ret: Maybe_Type = call one ()
+    if ret.Type_None? {
+        return ret
+    } else {
+        -- TYPE_FUNC
+        if accept _(TK_ARROW) {
+            var out: Maybe_Type = call parser_type ()
+            if out.Type_None? {
+                return Type_None
+            } else {
+                return Type_Some Type_Func (False,ret.Type_Some!,out.Type_Some!)
+            }
+        } else {
+            return ret
+        }
+    }
 }
 
 -------------------------------------------------------------------------------
@@ -698,13 +722,23 @@ func t_parser_type: () -> () {
     }
     -- TYPE_TUPLE
     {
-        call init _{"((),_char)"}
+        call open _{"((),_char)"}
         var ret: Maybe_Type = call parser_type ()
         var tup: (Bool,List_Type) = ret.Type_Some!.Type_Tuple!
         var nat: _(char*) = tup.2.Item_Type!.1.Type_Native!.2.2.Str!
         var ok: Bool = tup.2.Item_Type!.2.$List_Type?
         call _assert _(ok.sub && !strcmp(nat,"char"))
-        call _fclose inp
+        call close ()
+    }
+    -- TYPE_FUNC
+    {
+        call open _{"() -> ()"}
+        var ret: Maybe_Type = call parser_type ()
+        var fun: (Bool,Type,Type) = ret.Type_Some!.Type_Func!
+        var ok1: Bool = fun.2.Type_Unit?
+        var ok2: Bool = fun.3.Type_Unit?
+        call _assert _(ok1.sub && ok2.sub)
+        call close ()
     }
 }
 
