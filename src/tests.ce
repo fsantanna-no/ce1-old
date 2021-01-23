@@ -478,21 +478,24 @@ func parser_type: () -> Maybe_Type {
             if accept _{')'} {
                 return tmp
             }
+            if not accept_err _(',') {
+                return None_Type
+            }
 
             -- TYPE_TUPLE
             var lst: List_Type = Item_Type (tmp.Some_Type!, $List_Type)
             {
-                var cur: \List_Type = \lst
+                var cur: \List_Type = \lst.Item_Type!.2
                 loop {
-                    if not accept_err _(',') {
-                        break
-                    }
                     var tmp: Maybe_Type = call parser_type ()
                     if tmp.None_Type? {
                         return None_Type
                     }
-                    set cur\.Item_Type! = (tmp.Some_Type!, $List_Type)
+                    set cur\ = Item_Type (tmp.Some_Type!, $List_Type)
                     set cur = \cur\.Item_Type!.2
+                    if not accept_err _(',') {
+                        break
+                    }
                 }
             }
 
@@ -527,16 +530,17 @@ func parser_type: () -> Maybe_Type {
 
 -------------------------------------------------------------------------------
 
---type pre Type
+type pre Expr
 
---type rec List_Type {
---    Item_Type: (Type, List_Type)
---}
+type rec List_Expr {
+    Item_Expr: (Expr, List_Expr)
+}
 
 type rec Expr {                             -- CE1: subtype isrec=Bool
     Expr_Unit:   (Int,TK_Val,Int,Int)
     Expr_Var:    (Int,TK_Val,Int,Int)
     Expr_Native: (Int,TK_Val,Int,Int)
+    Expr_Tuple:  List_Expr
 }
 
 type Maybe_Expr {
@@ -566,14 +570,36 @@ func parser_expr: () -> Maybe_Expr {
         if e.None_Expr? {
             return None_Expr
         }
+
         -- EXPR_PARENS
         if accept _{')'} {
             return e
         }
-        -- EXPR_TUPLE
         if not accept_err _(',') {
             return None_Expr
         }
+
+        -- EXPR_TUPLE
+        var lst: List_Expr = Item_Expr (e.Some_Expr!, $List_Expr)
+        {
+            var cur: \List_Expr = \lst.Item_Expr!.2
+            loop {
+                var tmp: Maybe_Expr = call parser_expr ()
+                if tmp.None_Expr? {
+                    return None_Expr
+                }
+                set cur\ = Item_Expr (tmp.Some_Expr!, $List_Expr)
+                set cur = \cur\.Item_Expr!.2
+                if not accept_err _(',') {
+                    break
+                }
+            }
+        }
+
+        if not accept_err _{')'} {
+            return None_Expr
+        }
+        return Some_Expr Expr_Tuple lst
     }
 
     call err_expected _("expression")
@@ -817,8 +843,8 @@ func t_parser_type: () -> () {
         call open _{"((),_char)"}
         var ret: Maybe_Type = call parser_type ()
         var tup: (Bool,List_Type) = ret.Some_Type!.Type_Tuple!
-        var nat: _(char*) = tup.2.Item_Type!.1.Type_Native!.2.2.Str!
-        var ok: Bool = tup.2.Item_Type!.2.$List_Type?
+        var nat: _(char*) = tup.2.Item_Type!.2.Item_Type!.1.Type_Native!.2.2.Str!
+        var ok: Bool = tup.2.Item_Type!.2.Item_Type!.2.$List_Type?
         call _assert _(ok.sub && !strcmp(nat,"char"))
         call close ()
     }
@@ -881,6 +907,23 @@ func t_parser_expr: () -> () {
         var ok: Bool = e.Some_Expr?
         var str: _(char*) = e.Some_Expr!.Expr_Native!.2.Str!
         call _assert _(ok.sub && !strcmp(str,"x"))
+        call close ()
+    }
+    -- EXPR_TUPLE
+    {
+        call open _{"((),x,"}
+        var e: Maybe_Expr = call parser_expr ()
+        var ok: Bool = e.None_Expr?
+        call _assert _{ok.sub && !strcmp(err,"(ln 1, col 7): expected expression : have end of file")}
+        call close ()
+    }
+    {
+        call open _{"((),x,())"}
+        var e: Maybe_Expr = call parser_expr ()
+        var ok: Bool = e.Some_Expr?
+        var tup: List_Expr = e.Some_Expr!.Expr_Tuple!
+        var ok2: Bool = tup.Item_Expr!.2.Item_Expr!.1.Expr_Var?
+        call _assert _{ok.sub && ok2.sub}
         call close ()
     }
 }
