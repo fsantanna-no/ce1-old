@@ -367,26 +367,6 @@ func lexer: () -> () {
 
 -------------------------------------------------------------------------------
 
-type pre Type
-
-type rec List_Type {
-    Item_Type: (Type, List_Type)
-}
-
-type rec Type {                             -- CE1: subtype isrec=Bool
-    Type_Any:    Bool
-    Type_Unit:   Bool
-    Type_Native: (Bool, (Int,TK_Val,Int,Int))
-    Type_User:   (Bool, (Int,TK_Val,Int,Int))
-    Type_Tuple:  (Bool, List_Type)
-    Type_Func:   (Bool, Type, Type)
-}
-
-type Maybe_Type {
-    Type_None: ()
-    Type_Some: Type
-}
-
 func accept: _TK -> Bool {
     if asbool _(tk1._1 == arg) {
         call lexer ()
@@ -413,6 +393,26 @@ func close: () -> () {
 }
 
 -------------------------------------------------------------------------------
+
+type pre Type
+
+type rec List_Type {
+    Item_Type: (Type, List_Type)
+}
+
+type rec Type {                             -- CE1: subtype isrec=Bool
+    Type_Any:    Bool
+    Type_Unit:   Bool
+    Type_Native: (Bool, (Int,TK_Val,Int,Int))
+    Type_User:   (Bool, (Int,TK_Val,Int,Int))
+    Type_Tuple:  (Bool, List_Type)
+    Type_Func:   (Bool, Type, Type)
+}
+
+type Maybe_Type {
+    Type_None: ()
+    Type_Some: Type
+}
 
 func parser_type: () -> Maybe_Type {
 --native _{ printf(">>> %d\n", tk1._1); }
@@ -486,6 +486,30 @@ func parser_type: () -> Maybe_Type {
             return ret
         }
     }
+}
+
+-------------------------------------------------------------------------------
+
+--type pre Type
+
+--type rec List_Type {
+--    Item_Type: (Type, List_Type)
+--}
+
+type rec Expr {                             -- CE1: subtype isrec=Bool
+    Expr_Unit:   (Int,TK_Val,Int,Int)
+}
+
+type Maybe_Expr {
+    Expr_None: ()
+    Expr_Some: Expr
+}
+
+func parser_expr: () -> Maybe_Expr {
+    if accept _TK_UNIT {
+        return Expr_Some Expr_Unit tk0
+    }
+    call _assert 0
 }
 
 -------------------------------------------------------------------------------
@@ -742,5 +766,17 @@ func t_parser_type: () -> () {
     }
 }
 
+func t_parser_expr: () -> () {
+    -- EXPR_UNIT
+    {
+        call open _{"()"}
+        var e: Maybe_Expr = call parser_expr ()
+        var ok: Bool = e.Expr_Some!.Expr_Unit?
+        call _assert _(ok.sub)
+        call close ()
+    }
+}
+
 call t_lexer  ()
 call t_parser_type ()
+call t_parser_expr ()
