@@ -561,6 +561,7 @@ type rec Expr {                             -- CE2: subtype isrec=Bool
     Expr_Tuple:  List_Expr
     Expr_Call:   (Expr,Expr)
     Expr_Cons:   ((Int,TK_Val,Int,Int),Expr)
+    Expr_Index:  (Expr,(Int,TK_Val,Int,Int))
 }
 
 type Maybe_Expr {
@@ -653,6 +654,24 @@ func parser_expr: Bool -> Maybe_Expr {
         var e: Maybe_Expr = parser_expr False
         if e.Some_Expr? {
             return Some_Expr Expr_Call (ret.Some_Expr!, e.Some_Expr!)
+        }
+    }
+
+    -- EXPR_INDEX / EXPR_DISC / EXPR_PRED
+    loop {
+        var tk_bef: (Int,TK_Val,Int,Int) = tk0
+
+        if accept _('.') {
+            -- EXPR_INDEX
+            if accept _(TX_NUM) {
+                return Some_Expr Expr_Index (ret.Some_Expr!,tk0)
+            }
+        } else {
+            if asbool _(tk_bef._3==tk0._3 && tk_bef._4==tk0._4) {
+                break               -- nothing extra read: OK!
+            } else {
+                return None_Expr    -- extra token read:   NO!
+            }
         }
     }
 
@@ -1028,6 +1047,16 @@ func t_parser_expr: () -> () {
         var str: _(char*) = cons.1.2.Str!
         var ok2: Bool = cons.2.Expr_Tuple?
         call _assert _{ok2.sub && !strcmp(str,"Zz1")}
+        call close ()
+    }
+    -- EXPR_INDEX
+    {
+        call open _{"x.1"}
+        var e: Maybe_Expr = call parser_expr True
+        var idx: (Expr,(Int,TK_Val,Int,Int)) = e.Some_Expr!.Expr_Index!
+        var str: _(char*) = idx.1.Expr_Var!.2.Str!
+        var num: Int = idx.2.2.Num!
+        call _assert _{num==1 && !strcmp(str,"x")}
         call close ()
     }
 }
