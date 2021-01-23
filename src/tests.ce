@@ -558,6 +558,7 @@ type rec Expr {                             -- CE1: subtype isrec=Bool
     Expr_Native: (Int,TK_Val,Int,Int)
     Expr_Tuple:  List_Expr
     Expr_Call:   (Expr,Expr)
+    Expr_Cons:   ((Int,TK_Val,Int,Int),Expr)
 }
 
 type Maybe_Expr {
@@ -619,6 +620,18 @@ func parser_expr_: () -> Maybe_Expr {
             return None_Expr
         }
         return Some_Expr Expr_Tuple lst
+    }
+
+    -- EXPR_CONS
+    if accept _(TX_USER) {
+        var sub: (Int,TK_Val,Int,Int) = tk0
+        var e: Maybe_Expr = parser_expr False
+        if e.None_Expr? {
+            var tk: (Int,TK_Val,Int,Int) = tk1
+            set tk.1 = _TK_UNIT
+            set e = Some_Expr Expr_Unit tk
+        }
+        return Some_Expr Expr_Cons (sub,e.Some_Expr!)
     }
 
     call err_expected _("expression")
@@ -968,7 +981,6 @@ func t_parser_expr: () -> () {
     {
         call open _{"xxx ()"}
         var e: Maybe_Expr = call parser_expr True
-        var ok: Bool = e.Some_Expr?
         var cal: (Expr,Expr) = e.Some_Expr!.Expr_Call!
         var ok1: Bool = cal.1.Expr_Var?
         var ok2: Bool = cal.2.Expr_Unit?
@@ -980,13 +992,31 @@ func t_parser_expr: () -> () {
         call open _{"call xxx ()"}
         var e: Maybe_Expr = call parser_expr True
 --output std (\e)
-        var ok: Bool = e.Some_Expr?
         var cal: (Expr,Expr) = e.Some_Expr!.Expr_Call!
---Some_Expr (Expr_Call (Expr_Var (261,Str?,1,1),Expr_Unit (259,Str?,1,5)))
         var ok1: Bool = cal.1.Expr_Var?
         var ok2: Bool = cal.2.Expr_Unit?
         var str: _(char*) = cal.1.Expr_Var!.2.Str!
         call _assert _{ok1.sub && ok2.sub && !strcmp(str,"xxx")}
+        call close ()
+    }
+    {
+        call open _{"f()\n()\n()"}
+        var e: Maybe_Expr = call parser_expr True
+        var cal: (Expr,Expr) = e.Some_Expr!.Expr_Call!
+        var ok1: Bool = cal.1.Expr_Var?
+        var ok2: Bool = cal.2.Expr_Unit?
+        var str: _(char*) = cal.1.Expr_Var!.2.Str!
+        call _assert _{ok1.sub && ok2.sub && !strcmp(str,"f")}
+        call close ()
+    }
+    -- EXPR_CONS
+    {
+        call open _{"True ()"}
+        var e: Maybe_Expr = call parser_expr True
+        var cons: ((Int,TK_Val,Int,Int),Expr) = e.Some_Expr!.Expr_Cons!
+        var str: _(char*) = cons.1.2.Str!
+        var ok2: Bool = cons.2.Expr_Unit?
+        call _assert _{ok2.sub && !strcmp(str,"True")}
         call close ()
     }
 }
