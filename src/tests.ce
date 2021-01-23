@@ -534,8 +534,9 @@ func parser_type: () -> Maybe_Type {
 --}
 
 type rec Expr {                             -- CE1: subtype isrec=Bool
-    Expr_Unit: (Int,TK_Val,Int,Int)
-    Expr_Var:  (Int,TK_Val,Int,Int)
+    Expr_Unit:   (Int,TK_Val,Int,Int)
+    Expr_Var:    (Int,TK_Val,Int,Int)
+    Expr_Native: (Int,TK_Val,Int,Int)
 }
 
 type Maybe_Expr {
@@ -552,6 +553,11 @@ func parser_expr: () -> Maybe_Expr {
     -- EXPR_VAR
     if accept _TX_VAR {
         return Some_Expr Expr_Var tk0
+    }
+
+    -- EXPR_VAR
+    if accept _TX_NATIVE {
+        return Some_Expr Expr_Native tk0
     }
 
     -- EXPR_PARENS / EXPR_TUPLE
@@ -866,6 +872,15 @@ func t_parser_expr: () -> () {
         var e: Maybe_Expr = call parser_expr ()
         var ok: Bool = e.None_Expr?
         call _assert _{ok.sub && !strcmp(err,"(ln 1, col 3): expected `,´ : have end of file")}
+        call close ()
+    }
+    -- EXPR_NATIVE
+    {
+        call open _{"_x"}
+        var e: Maybe_Expr = call parser_expr ()
+        var ok: Bool = e.Some_Expr?
+        var str: _(char*) = e.Some_Expr!.Expr_Native!.2.Str!
+        call _assert _(ok.sub && !strcmp(str,"x"))
         call close ()
     }
 }
