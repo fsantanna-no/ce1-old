@@ -11,6 +11,22 @@ func not: Bool -> Bool {
     }
 }
 
+func and: (Bool,Bool) -> Bool {
+    if arg.1 {
+        return arg.2
+    } else {
+        return False
+    }
+}
+
+func or: (Bool,Bool) -> Bool {
+    if arg.1 {
+        return True
+    } else {
+        return arg.2
+    }
+}
+
 func asbool: Int -> Bool {
     return _(arg ? (Bool){True} : (Bool){False})
 }
@@ -549,7 +565,7 @@ type Maybe_Expr {
     Some_Expr: Expr
 }
 
-func pre parser_expr: () -> Maybe_Expr
+func pre parser_expr: Bool -> Maybe_Expr
 
 func parser_expr_: () -> Maybe_Expr {
     -- EXPR_UNIT
@@ -569,7 +585,7 @@ func parser_expr_: () -> Maybe_Expr {
 
     -- EXPR_PARENS / EXPR_TUPLE
     if accept _{'('} {
-        var e: Maybe_Expr = parser_expr ()
+        var e: Maybe_Expr = parser_expr False
         if e.None_Expr? {
             return None_Expr
         }
@@ -587,7 +603,7 @@ func parser_expr_: () -> Maybe_Expr {
         {
             var cur: \List_Expr = \lst.Item_Expr!.2
             loop {
-                var tmp: Maybe_Expr = call parser_expr ()
+                var tmp: Maybe_Expr = parser_expr False
                 if tmp.None_Expr? {
                     return None_Expr
                 }
@@ -609,15 +625,17 @@ func parser_expr_: () -> Maybe_Expr {
     return None_Expr
 }
 
-func parser_expr: () -> Maybe_Expr {
+func parser_expr: Bool -> Maybe_Expr {
+    var ispre: Bool = and (arg, accept _(TK_CALL))
+
     var ret: Maybe_Expr = parser_expr_ ()
     if ret.None_Expr? {
         return None_Expr
     }
 
     -- EXPR_CALL
-    if ret.Some_Expr!.Expr_Var? {
-        var e: Maybe_Expr = parser_expr ()
+    if or (ret.Some_Expr!.Expr_Var?, ret.Some_Expr!.Expr_Native?) {
+        var e: Maybe_Expr = parser_expr False
         if e.Some_Expr? {
             return Some_Expr Expr_Call (ret.Some_Expr!, e.Some_Expr!)
         }
@@ -884,7 +902,7 @@ func t_parser_expr: () -> () {
     -- EXPR_UNIT
     {
         call open _{"()"}
-        var e: Maybe_Expr = call parser_expr ()
+        var e: Maybe_Expr = call parser_expr True
         var ok: Bool = e.Some_Expr!.Expr_Unit?
         call _assert _(ok.sub)
         call close ()
@@ -892,7 +910,7 @@ func t_parser_expr: () -> () {
     -- EXPR_VAR
     {
         call open _{"x"}
-        var e: Maybe_Expr = call parser_expr ()
+        var e: Maybe_Expr = call parser_expr False
         var ok: Bool = e.Some_Expr!.Expr_Var?
         var str: _(char*) = e.Some_Expr!.Expr_Var!.2.Str!
         call _assert _(ok.sub && !strcmp(str,"x"))
@@ -901,21 +919,21 @@ func t_parser_expr: () -> () {
     -- EXPR_PARENS
     {
         call open _{"(())"}
-        var e: Maybe_Expr = call parser_expr ()
+        var e: Maybe_Expr = call parser_expr True
         var ok: Bool = e.Some_Expr!.Expr_Unit?
         call _assert _(ok.sub)
         call close ()
     }
     {
         call open _{"("}
-        var e: Maybe_Expr = call parser_expr ()
+        var e: Maybe_Expr = call parser_expr False
         var ok: Bool = e.None_Expr?
         call _assert _{ok.sub && !strcmp(err,"(ln 1, col 2): expected expression : have end of file")}
         call close ()
     }
     {
         call open _{"(x"}
-        var e: Maybe_Expr = call parser_expr ()
+        var e: Maybe_Expr = call parser_expr True
         var ok: Bool = e.None_Expr?
         call _assert _{ok.sub && !strcmp(err,"(ln 1, col 3): expected `,´ : have end of file")}
         call close ()
@@ -923,7 +941,7 @@ func t_parser_expr: () -> () {
     -- EXPR_NATIVE
     {
         call open _{"_x"}
-        var e: Maybe_Expr = call parser_expr ()
+        var e: Maybe_Expr = call parser_expr False
         var ok: Bool = e.Some_Expr?
         var str: _(char*) = e.Some_Expr!.Expr_Native!.2.Str!
         call _assert _(ok.sub && !strcmp(str,"x"))
@@ -932,14 +950,14 @@ func t_parser_expr: () -> () {
     -- EXPR_TUPLE
     {
         call open _{"((),x,"}
-        var e: Maybe_Expr = call parser_expr ()
+        var e: Maybe_Expr = call parser_expr True
         var ok: Bool = e.None_Expr?
         call _assert _{ok.sub && !strcmp(err,"(ln 1, col 7): expected expression : have end of file")}
         call close ()
     }
     {
         call open _{"((),x,())"}
-        var e: Maybe_Expr = call parser_expr ()
+        var e: Maybe_Expr = call parser_expr False
         var ok: Bool = e.Some_Expr?
         var tup: List_Expr = e.Some_Expr!.Expr_Tuple!
         var ok2: Bool = tup.Item_Expr!.2.Item_Expr!.1.Expr_Var?
@@ -949,7 +967,18 @@ func t_parser_expr: () -> () {
     -- EXPR_CALL
     {
         call open _{"xxx ()"}
-        var e: Maybe_Expr = call parser_expr ()
+        var e: Maybe_Expr = call parser_expr True
+        var ok: Bool = e.Some_Expr?
+        var cal: (Expr,Expr) = e.Some_Expr!.Expr_Call!
+        var ok1: Bool = cal.1.Expr_Var?
+        var ok2: Bool = cal.2.Expr_Unit?
+        var str: _(char*) = cal.1.Expr_Var!.2.Str!
+        call _assert _{ok1.sub && ok2.sub && !strcmp(str,"xxx")}
+        call close ()
+    }
+    {
+        call open _{"call xxx ()"}
+        var e: Maybe_Expr = call parser_expr True
 --output std (\e)
         var ok: Bool = e.Some_Expr?
         var cal: (Expr,Expr) = e.Some_Expr!.Expr_Call!
