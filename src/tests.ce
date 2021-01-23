@@ -534,7 +534,8 @@ func parser_type: () -> Maybe_Type {
 --}
 
 type rec Expr {                             -- CE1: subtype isrec=Bool
-    Expr_Unit:   (Int,TK_Val,Int,Int)
+    Expr_Unit: (Int,TK_Val,Int,Int)
+    Expr_Var:  (Int,TK_Val,Int,Int)
 }
 
 type Maybe_Expr {
@@ -543,10 +544,34 @@ type Maybe_Expr {
 }
 
 func parser_expr: () -> Maybe_Expr {
+    -- EXPR_UNIT
     if accept _TK_UNIT {
         return Some_Expr Expr_Unit tk0
     }
-    call _assert 0
+
+    -- EXPR_VAR
+    if accept _TX_VAR {
+        return Some_Expr Expr_Var tk0
+    }
+
+    -- EXPR_PARENS / EXPR_TUPLE
+    if accept _{'('} {
+        var e: Maybe_Expr = parser_expr ()
+        if e.None_Expr? {
+            return None_Expr
+        }
+        -- EXPR_PARENS
+        if accept _{')'} {
+            return e
+        }
+        -- EXPR_TUPLE
+        if not accept_err _(',') {
+            return None_Expr
+        }
+    }
+
+    call err_expected _("expression")
+    return None_Expr
 }
 
 -------------------------------------------------------------------------------
@@ -810,6 +835,37 @@ func t_parser_expr: () -> () {
         var e: Maybe_Expr = call parser_expr ()
         var ok: Bool = e.Some_Expr!.Expr_Unit?
         call _assert _(ok.sub)
+        call close ()
+    }
+    -- EXPR_VAR
+    {
+        call open _{"x"}
+        var e: Maybe_Expr = call parser_expr ()
+        var ok: Bool = e.Some_Expr!.Expr_Var?
+        var str: _(char*) = e.Some_Expr!.Expr_Var!.2.Str!
+        call _assert _(ok.sub && !strcmp(str,"x"))
+        call close ()
+    }
+    -- EXPR_PARENS
+    {
+        call open _{"(())"}
+        var e: Maybe_Expr = call parser_expr ()
+        var ok: Bool = e.Some_Expr!.Expr_Unit?
+        call _assert _(ok.sub)
+        call close ()
+    }
+    {
+        call open _{"("}
+        var e: Maybe_Expr = call parser_expr ()
+        var ok: Bool = e.None_Expr?
+        call _assert _{ok.sub && !strcmp(err,"(ln 1, col 2): expected expression : have end of file")}
+        call close ()
+    }
+    {
+        call open _{"(x"}
+        var e: Maybe_Expr = call parser_expr ()
+        var ok: Bool = e.None_Expr?
+        call _assert _{ok.sub && !strcmp(err,"(ln 1, col 3): expected `,´ : have end of file")}
         call close ()
     }
 }
