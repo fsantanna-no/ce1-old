@@ -1,4 +1,4 @@
-type Bool {
+type Bool {                 -- CE2: include prelude
     False: ()
     True:  ()
 }
@@ -30,6 +30,8 @@ func or: (Bool,Bool) -> Bool {
 func asbool: Int -> Bool {
     return _(arg ? (Bool){True} : (Bool){False})
 }
+
+-------------------------------------------------------------------------------
 
 native pre _{
     #include <string.h>
@@ -1017,6 +1019,15 @@ func t_parser_expr: () -> () {
         var str: _(char*) = cons.1.2.Str!
         var ok2: Bool = cons.2.Expr_Unit?
         call _assert _{ok2.sub && !strcmp(str,"True")}
+        call close ()
+    }
+    {
+        call open _{"Zz1 ((),())"}
+        var e: Maybe_Expr = call parser_expr True
+        var cons: ((Int,TK_Val,Int,Int),Expr) = e.Some_Expr!.Expr_Cons!
+        var str: _(char*) = cons.1.2.Str!
+        var ok2: Bool = cons.2.Expr_Tuple?
+        call _assert _{ok2.sub && !strcmp(str,"Zz1")}
         call close ()
     }
 }
