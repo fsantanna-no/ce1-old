@@ -125,6 +125,35 @@ var err: _Err_Buf = ?
 
 -------------------------------------------------------------------------------
 
+func lexer_tk2err: Int -> _(const char*) {
+    native _{ static char str[512]; }
+    if asbool _(arg == TK_EOF) {
+        native _{ strcpy(str, "end of file"); }
+        return _str
+    }
+    if asbool _(arg == TX_NATIVE) {
+        native _{ strcpy(str, "`_{...}´"); }
+        return _str
+    }
+    if asbool _(arg == TX_VAR) {
+        native _{ strcpy(str, "variable identifier"); }
+        return _str
+    }
+    if asbool _(arg == TX_USER) {
+        native _{ strcpy(str, "type identifier"); }
+        return _str
+    }
+    if asbool _(arg == TX_NUM) {
+        native _{ strcpy(str, "tuple index"); }
+        return _str
+    }
+    if asbool _(arg>0 && arg<TK_SINGLE) {
+        native _{ sprintf(str, "`%c´", arg); }
+        return _str
+    }
+    call _assert 0
+}
+
 func lexer_tk2str: (Int,TK_Val,Int,Int) -> _(const char*) {
     native _{ static char str[TK_BUF+256]; }
     if asbool _(arg._1 == TK_EOF) {
@@ -367,6 +396,11 @@ func lexer: () -> () {
 
 -------------------------------------------------------------------------------
 
+func err_expected: _(const char*) -> () {
+    native _{ sprintf(err, "(ln %d, col %d): expected %s : have %s",
+        tk1._3, tk1._4, arg, lexer_tk2str(tk1)); }
+}
+
 func accept: _TK -> Bool {
     if asbool _(tk1._1 == arg) {
         call lexer ()
@@ -376,9 +410,12 @@ func accept: _TK -> Bool {
     }
 }
 
-func err_expected: _(const char*) -> () {
-    native _{ sprintf(err, "(ln %d, col %d): expected %s : have %s",
-        tk1._3, tk1._4, arg, lexer_tk2str(tk1)); }
+func accept_err: _TK -> Bool {
+    var ret: Bool = accept(arg);
+    if not ret {
+        call err_expected _(lexer_tk2err(arg))
+    }
+    return ret
 }
 
 func open: _(char*) -> () {
@@ -431,7 +468,7 @@ func parser_type: () -> Maybe_Type {
         }
 
         -- TYPE_PARENS / TYPE_TUPLE
-        if accept _{'('} {
+        if accept_err _{'('} {
             var tmp: Maybe_Type = call parser_type ()
             if tmp.None_Type? {
                 return None_Type
@@ -447,7 +484,7 @@ func parser_type: () -> Maybe_Type {
             {
                 var cur: \List_Type = \lst
                 loop {
-                    if not accept _(',') {
+                    if not accept_err _(',') {
                         break
                     }
                     var tmp: Maybe_Type = call parser_type ()
@@ -459,7 +496,7 @@ func parser_type: () -> Maybe_Type {
                 }
             }
 
-            if not accept _{')'} {
+            if not accept_err _{')'} {
                 return None_Type
             }
 
