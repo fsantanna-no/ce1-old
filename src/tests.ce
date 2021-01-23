@@ -401,6 +401,15 @@ func err_expected: _(const char*) -> () {
         tk1._3, tk1._4, arg, lexer_tk2str(tk1)); }
 }
 
+func init: _(char*) -> () {
+    set inp = _(stropen("r", 0, arg))
+    set lin = 1;
+    set col = 1;
+    call lexer ()
+}
+
+-------------------------------------------------------------------------------
+
 func parser_type: () -> Maybe_Type {
 --native _{ printf(">>> %d\n", tk1._1); }
     var isalias: Bool = call accept _('\\')
@@ -689,10 +698,7 @@ func t_parser_type: () -> () {
     }
     -- TYPE_TUPLE
     {
-        set inp = _(stropen("r", 0, "((),_char)"))
-        set lin = 1;
-        set col = 1;
-        call lexer ()
+        call init _{"((),_char)"}
         var ret: Maybe_Type = call parser_type ()
         var tup: (Bool,List_Type) = ret.Type_Some!.Type_Tuple!
         var nat: _(char*) = tup.2.Item_Type!.1.Type_Native!.2.2.Str!
