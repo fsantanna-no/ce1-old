@@ -531,6 +531,10 @@ type Maybe_Type {                           -- CE2: generic
     Some_Type: Type
 }
 
+func type_is_ptr: \Type -> Bool {
+    return asbool _(*((int*)arg))
+}
+
 func parser_type: () -> Maybe_Type {
 --native _{ printf(">>> %d\n", tk1._1); }
 
@@ -1162,6 +1166,19 @@ func env_expr_to_type: (\List_Env,\Expr) -> Type {
         return Type_Nat (False,e\.Expr_Nat!)
     }
 
+    if e\.Expr_Tuple? {
+        var cur: \List_Expr = \e\.Expr_Tuple!
+        loop {                                      -- CE2: map
+            if cur\.$List_Expr? {
+                break
+            }
+
+            --TODO
+
+            set cur = \cur\.Item_Expr!.2
+        }
+    }
+
     call _assert 0
 }
 
@@ -1172,22 +1189,43 @@ func out: _String -> () {
 }
 
 func to_ce_: (_String, \Type) -> () {
-}
+    var out: _String = arg.1
+    var tp:  \Type   = arg.2
 
-func to_c_: (_String,(\List_Env,\Type)) -> () {
-    var tp: \Type = arg.2.2
+    if tp\.Type_Unit? {
+        native _{ strcat(out, "Unit"); }
+        return ()
+    }
+
     if tp\.Type_Tuple? {
-        native _{ strcat(arg._1, "TUPLE"); }
+        native _{ strcat(out, "TUPLE"); }
         var cur: \List_Type = \tp\.Type_Tuple!.2
         loop {                                      -- CE2: foreach
             if cur\.$List_Type? {
                 break
             }
-            native _{ strcat(arg._1, "__"); }
-            call to_ce_ (arg.1, \cur\.Item_Type!.1)
+
+            var tp_: \Type = \cur\.Item_Type!.1
+            native _{ strcat(out, "__"); }
+            call to_ce_ (out, tp_)
+            if type_is_ptr tp {
+                native _{ strcat(out, "_ptr"); }
+            }
+
             set cur = \cur\.Item_Type!.2
         }
+        return ()
     }
+    call _assert 0
+}
+
+func to_c_: (_String,(\List_Env,\Type)) -> () {
+    var tp: \Type = arg.2.2
+    if tp\.Type_Tuple? {
+        call to_ce_(arg.1, tp)
+        return ()
+    }
+    call _assert 0
 }
 
 func to_c: (\List_Env,\Type) -> _String {
