@@ -55,7 +55,7 @@ native _{
         TK_ARROW,
         TK_UNIT,
 
-        TX_NATIVE,
+        TX_NAT,
         TX_VAR,
         TX_EMPTY,
         TX_USER,
@@ -71,11 +71,11 @@ native _{
         TK_IF,
         TK_INPUT,
         TK_LOOP,
-        TK_NATIVE,
+        TK_NAT,
         TK_OUTPUT,
         TK_PRE,
         TK_REC,
-        TK_RETURN,
+        TK_RET,
         TK_SET,
         TK_TYPE,
         TK_VAR
@@ -150,7 +150,7 @@ func lexer_tk2err: Int -> _(const char*) {
         native _{ strcpy(str, "end of file"); }
         return _str
     }
-    if asbool _(arg == TX_NATIVE) {
+    if asbool _(arg == TX_NAT) {
         native _{ strcpy(str, "`_{...}´"); }
         return _str
     }
@@ -183,7 +183,7 @@ func lexer_tk2str: (Int,TK_Val,Int,Int) -> _(const char*) {
         native _{ sprintf(str, "`()´"); }
         return _str
     }
-    if asbool _(arg._1 == TX_NATIVE) {
+    if asbool _(arg._1 == TX_NAT) {
         native _{ sprintf(str, "\"_%s\"", arg._2._Str); }
         return _str
     }
@@ -287,7 +287,7 @@ func lx_token: () -> () {
         call _assert 0
     }
 
-    -- TX_NATIVE
+    -- TX_NAT
     if asbool _(c == '_') {
         set c = _fgetc _inp
         var open: Int = 0
@@ -333,7 +333,7 @@ func lx_token: () -> () {
             native _(ungetc(c, inp);)
         }
 
-        set tk1.1 = _TX_NATIVE
+        set tk1.1 = _TX_NAT
         return ()
     }
 
@@ -509,7 +509,7 @@ func parser_type: () -> Maybe_Type {
         }
 
         -- TYPE_NATIVE
-        if accept _TX_NATIVE {
+        if accept _TX_NAT {
             return Some_Type Type_Nat (isalias, tk0)
         }
 
@@ -633,7 +633,7 @@ func parser_expr_: () -> Maybe_Expr {
     }
 
     -- EXPR_NATIVE
-    if accept _TX_NATIVE {
+    if accept _TX_NAT {
         return Some_Expr Expr_Nat tk0
     }
 
@@ -804,6 +804,8 @@ type Maybe_Sub {
     Some_Sub: ((Int,TK_Val,Int,Int), Type)
 }
 
+type pre Maybe_Stmt
+
 type rec Stmt {
     Stmt_Pass:  ()
     Stmt_Var:   ((Int,TK_Val,Int,Int), Type, Expr)
@@ -812,9 +814,11 @@ type rec Stmt {
     Stmt_Seq:   (Stmt,Stmt)
     Stmt_Block: Stmt
     Stmt_If:    (Expr,Stmt,Stmt)
+    Stmt_Func:  ((Int,TK_Val,Int,Int), Type, Maybe_Stmt)
+    Stmt_Ret:   Expr
 }
 
-type Maybe_Stmt {
+type rec Maybe_Stmt {
     None_Stmt: ()
     Some_Stmt: Stmt
 }
@@ -939,13 +943,13 @@ func parser_stmt: () -> Maybe_Stmt {
             return None_Stmt
         }
 
-        var t: Maybe_Stmt = call parser_stmt ()
+        var t: Maybe_Stmt = call parser_block ()
         if t.None_Stmt? {
             return None_Stmt
         }
 
         if accept _TK_ELSE {
-            var f: Maybe_Stmt = call parser_stmt ()
+            var f: Maybe_Stmt = call parser_block ()
             if f.None_Stmt? {
                 return None_Stmt
             }
@@ -953,6 +957,39 @@ func parser_stmt: () -> Maybe_Stmt {
         } else {
             return Some_Stmt Stmt_If (tst.Some_Expr!,t.Some_Stmt!,Stmt_Pass)
         }
+    }
+
+    -- STMT_FUNC
+    if accept _TK_FUNC {
+        var ispre: Bool = accept _TK_PRE
+        if not accept _TX_VAR {
+            return None_Stmt
+        }
+        var tk_id: (Int,TK_Val,Int,Int) = tk0
+        if not accept _(':') {
+            return None_Stmt
+        }
+        var tp: Maybe_Type = call parser_type ()
+        if tp.None_Type? {
+            return None_Stmt
+        }
+        if ispre {
+            return Some_Stmt Stmt_Func (tk_id,tp.Some_Type!,None_Stmt)
+        }
+        var body: Maybe_Stmt = call parser_block ()
+        if body.None_Stmt? {
+            return None_Stmt
+        }
+        return Some_Stmt Stmt_Func (tk_id,tp.Some_Type!,body)
+    }
+
+    -- STMT_RET
+    if accept _TK_RET {
+        var e: Maybe_Expr = call parser_expr False
+        if e.None_Expr? {
+            return None_Stmt
+        }
+        return Some_Stmt Stmt_Ret e.Some_Expr!
     }
 
     -- STMT_BLOCK
@@ -1140,13 +1177,13 @@ func t_lexer: () -> () {
         call _fclose inp
     }
 
-    -- TX_NATIVE
+    -- TX_NAT
     {
         set inp = _(stropen("r", 0, "_char _Tp"))
         set lin = 1;
         set col = 1;
         call lexer () ; native _{
-            assert(tk1._1 == TX_NATIVE);
+            assert(tk1._1 == TX_NAT);
             assert(!strcmp(tk1._2._Str,"char"));
         }
         call _fclose inp
@@ -1156,11 +1193,11 @@ func t_lexer: () -> () {
         set lin = 1;
         set col = 1;
         call lexer () ; native _{
-            assert(tk1._1 == TX_NATIVE);
+            assert(tk1._1 == TX_NAT);
             assert(!strcmp(tk1._2._Str,"(1)"));
         }
         call lexer () ; native _{
-            assert(tk1._1 == TX_NATIVE);
+            assert(tk1._1 == TX_NAT);
             assert(!strcmp(tk1._2._Str,"2+2"));
         }
         call _fclose inp
@@ -1581,6 +1618,17 @@ func t_parser_stmt: () -> () {
         var ok1: Bool = if_.2.Stmt_Block!.Stmt_Pass?
         var ok2: Bool = if_.3.Stmt_Block!.Stmt_Call?
         call _assert _{ok.sub && ok1.sub && ok2.sub}
+        call close ()
+    }
+    -- STMT_FUNC
+    {
+        call open _{"func f : () -> () { return () }"}
+        var s: Maybe_Stmt = call parser_stmt ()
+        var f: ((Int,TK_Val,Int,Int),Type,Maybe_Stmt) = s.Some_Stmt!.Stmt_Func!
+        var str: _(char*) = f.1.2.Str!
+        var ok1: Bool = f.2.Type_Func?
+        var ok2: Bool = f.3.Some_Stmt!.Stmt_Block!.Stmt_Ret?
+        call _assert _{ok1.sub && ok2.sub && !strcmp(str,"f")}
         call close ()
     }
 }
