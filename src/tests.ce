@@ -816,6 +816,7 @@ type rec Stmt {
     Stmt_If:    (Expr,Stmt,Stmt)
     Stmt_Func:  ((Int,TK_Val,Int,Int), Type, Maybe_Stmt)
     Stmt_Ret:   Expr
+    Stmt_Nat:   (Bool,(Int,TK_Val,Int,Int))
 }
 
 type rec Maybe_Stmt {
@@ -995,6 +996,15 @@ func parser_stmt: () -> Maybe_Stmt {
     -- STMT_BLOCK
     if check _('{') {
         return parser_block ()
+    }
+
+    -- STMT_NAT
+    if accept _TK_NAT {
+        var ispre: Bool = call accept _TK_PRE
+        if not accept_err _TX_NAT {
+            return None_Stmt
+        }
+        return Some_Stmt Stmt_Nat (ispre,tk0)
     }
 
     call err_expected _("statement")
@@ -1620,7 +1630,7 @@ func t_parser_stmt: () -> () {
         call _assert _{ok.sub && ok1.sub && ok2.sub}
         call close ()
     }
-    -- STMT_FUNC
+    -- STMT_FUNC, STMT_RET
     {
         call open _{"func f : () -> () { return () }"}
         var s: Maybe_Stmt = call parser_stmt ()
@@ -1629,6 +1639,26 @@ func t_parser_stmt: () -> () {
         var ok1: Bool = f.2.Type_Func?
         var ok2: Bool = f.3.Some_Stmt!.Stmt_Block!.Stmt_Ret?
         call _assert _{ok1.sub && ok2.sub && !strcmp(str,"f")}
+        call close ()
+    }
+    {
+        call open _{"func pre f : () -> ()"}
+        var s: Maybe_Stmt = call parser_stmt ()
+        var f: ((Int,TK_Val,Int,Int),Type,Maybe_Stmt) = s.Some_Stmt!.Stmt_Func!
+        var str: _(char*) = f.1.2.Str!
+        var ok1: Bool = f.2.Type_Func?
+        var ok2: Bool = f.3.None_Stmt?
+        call _assert _{ok1.sub && ok2.sub && !strcmp(str,"f")}
+        call close ()
+    }
+    -- STMT_NAT
+    {
+        call open _{"native pre _{xxx}"}
+        var s: Maybe_Stmt = call parser_stmt ()
+        var nat: (Bool,(Int,TK_Val,Int,Int)) = s.Some_Stmt!.Stmt_Nat!
+        var ok: Bool = nat.1
+        var str: _(char*) = nat.2.2.Str!
+        call _assert _{ok.sub && !strcmp(str,"xxx")}
         call close ()
     }
 }
