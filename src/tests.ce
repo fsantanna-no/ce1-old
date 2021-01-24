@@ -27,8 +27,21 @@ func or: (Bool,Bool) -> Bool {
     }
 }
 
+native _{
+    typedef char* String;
+    typedef FILE* FILE_PTR;
+}
+
 func asbool: Int -> Bool {
     return _(arg ? (Bool){True} : (Bool){False})
+}
+
+func asint: _int -> Int {
+    return arg
+}
+
+func asstring: _(char*) -> _String {
+    return arg
 }
 
 -------------------------------------------------------------------------------
@@ -111,8 +124,6 @@ native _{
     #define TK_BUF 1024
     typedef char Str_Buf[TK_BUF];
     typedef char Err_Buf[ERR_BUF];
-    typedef char* String;
-    typedef FILE* FILE_PTR;
 }
 
 type TK_Val {
@@ -1113,10 +1124,59 @@ func parser: () -> Maybe_Stmt {
 
 -------------------------------------------------------------------------------
 
-func code_expr: \Expr -> () {
-    if arg\.Expr_Unit? {
+type rec List_Env {
+    Item_Env: ((_String,Type), List_Env)
+}
+
+func env_id_to_type: (\List_Env,_String) -> Maybe_Type {
+    var cur: \List_Env = arg.1
+    loop {
+        if cur\.$List_Env? {
+            break
+        }
+        var s: _String = cur\.Item_Env!.1.1
+        if asbool _(!strcmp(s,arg._2)) {
+            return Some_Type clone (\cur\.Item_Env!.1.2)
+        }
+        set cur = \cur\.Item_Env!.2
     }
-    return ()
+    return None_Type
+}
+
+func env_expr_to_type: (\List_Env,\Expr) -> Type {
+    var e: \Expr = arg.2
+
+    if e\.Expr_Unit? {
+        return Type_Unit False
+    }
+
+    if e\.Expr_Var? {
+        var id: _String = e\.Expr_Var!.2.Str!
+        return (env_id_to_type (arg.1,id)).Some_Type!
+    }
+    call _assert 0
+}
+
+-------------------------------------------------------------------------------
+
+func out: _String -> () {
+    native _{ fputs(arg, fout); }
+}
+
+func code_expr: (\List_Env,\Expr) -> () {
+    var tp: Type = call env_expr_to_type arg
+    if and (tp.Type_Unit?, not arg.2\.Expr_Call?) {
+        return ()   -- no code to generate
+    }
+
+    if arg.2\.Expr_Unit? {
+        return ()
+    }
+    if arg.2\.Expr_Var? {
+        call out arg.2\.Expr_Var!.2.Str!
+        return ()
+    }
+    call _assert 0
 }
 
 -------------------------------------------------------------------------------
@@ -1759,11 +1819,22 @@ func t_code: () -> () {
         native _{ char out[256]; }
         var s: _String = _out
         call open_out (s,256)
-        var enu: Int = _TK_UNIT
-        var e: Expr = Expr_Unit (enu,Str _({}),0,0)
-        call code_expr (\e)
+        var env: List_Env = $List_Env
+        var e: Expr = Expr_Unit (asint _TK_UNIT,Str _("()"),0,0)
+        call code_expr (\env,\e)
         call close ()
         call _assert _{!strcmp(out,"")}
+    }
+    -- EXPR_VAR
+    {
+        native _{ char out[256]; }
+        var s: _String = _out
+        call open_out (s,256)
+        var env: List_Env = Item_Env ((asstring _("xxx"),Type_Any False),$List_Env)
+        var e: Expr = Expr_Var (asint _TK_VAR,Str _("xxx"),0,0)
+        call code_expr (\env,\e)
+        call close ()
+        call _assert _{!strcmp(out,"xxx")}
     }
 }
 
