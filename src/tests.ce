@@ -1157,6 +1157,11 @@ func env_expr_to_type: (\List_Env,\Expr) -> Type {
         var tp: Maybe_Type = env_id_to_type (arg.1,id)
         return tp.Some_Type!
     }
+
+    if e\.Expr_Nat? {
+        return Type_Nat (False,e\.Expr_Nat!)
+    }
+
     call _assert 0
 }
 
@@ -1172,11 +1177,16 @@ func code_expr: (\List_Env,\Expr) -> () {
         return ()   -- no code to generate
     }
 
-    if arg.2\.Expr_Unit? {
+    var e: \Expr = arg.2
+    if e\.Expr_Unit? {
         return ()
     }
-    if arg.2\.Expr_Var? {
-        call out arg.2\.Expr_Var!.2.Str!
+    if e\.Expr_Var? {
+        call out e\.Expr_Var!.2.Str!
+        return ()
+    }
+    if e\.Expr_Nat? {
+        call out e\.Expr_Nat!.2.Str!
         return ()
     }
     call _assert 0
@@ -1835,6 +1845,17 @@ func t_code: () -> () {
         call open_out (s,256)
         var env: List_Env = Item_Env ((asstring _("xxx"),Type_Any False),$List_Env)
         var e: Expr = Expr_Var (asint _TK_VAR,Str _("xxx"),0,0)
+        call code_expr (\env,\e)
+        call close ()
+        call _assert _{!strcmp(out,"xxx")}
+    }
+    -- EXPR_NATIVE
+    {
+        native _{ char out[256]; }
+        var s: _String = _out
+        call open_out (s,256)
+        var env: List_Env = Item_Env ((asstring _("xxx"),Type_Any False),$List_Env)
+        var e: Expr = Expr_Nat (asint _TK_NAT,Str _("xxx"),0,0)
         call code_expr (\env,\e)
         call close ()
         call _assert _{!strcmp(out,"xxx")}
