@@ -808,6 +808,7 @@ type rec Stmt {
     Stmt_Var:  ((Int,TK_Val,Int,Int), Type, Expr)
     Stmt_User: (Bool, (Int,TK_Val,Int,Int), List_Sub)
     Stmt_Call: Expr
+    Stmt_Seq:  (Stmt,Stmt)
 }
 
 type Maybe_Stmt {
@@ -912,7 +913,39 @@ func parser_stmt: () -> Maybe_Stmt {
         return Some_Stmt Stmt_Call e.Some_Expr!
     }
 
-    call _assert 0
+    call err_expected _("statement")
+    return None_Stmt
+}
+
+func enseq: (Maybe_Stmt,Maybe_Stmt) -> Maybe_Stmt {
+    if arg.1.None_Stmt? {
+        return arg.2
+    }
+    if arg.2.None_Stmt? {
+        return arg.1
+    }
+    return Some_Stmt Stmt_Seq (arg.1.Some_Stmt!,arg.2.Some_Stmt!)
+}
+
+func parser_stmts: _TK -> Maybe_Stmt {
+    var ret: Maybe_Stmt = None_Stmt
+    loop {
+        call accept _(';')
+        var tk_bef: (Int,TK_Val,Int,Int) = tk0
+        var s: Maybe_Stmt = call parser_stmt ()
+        if s.None_Stmt? {
+            if asbool _(tk_bef._3!=tk0._3 || tk_bef._4!=tk0._4) {
+                return None_Stmt    -- extra token read:   NO!
+            }
+            if check arg {
+                break
+            }
+            return None_Stmt
+        }
+        var tmp: Maybe_Stmt = ret
+        set ret = enseq (tmp,s)
+    }
+    return ret
 }
 
 -------------------------------------------------------------------------------
@@ -1447,6 +1480,34 @@ func t_parser_stmt: () -> () {
         var ok1: Bool = cal.Expr_Call!.1.Expr_Nat?
         var ok2: Bool = cal.Expr_Call!.2.Expr_Unit?
         call _assert _{ok.sub && ok1.sub && ok2.sub}
+        call close ()
+    }
+    -- STMT_SEQ
+    {
+        call open _{"call f() ; call _printf () ; call g()"}
+        var s: Maybe_Stmt = call parser_stmts _TK_EOF
+        var seq: (Stmt,Stmt) = s.Some_Stmt!.Stmt_Seq!
+        {
+            var cal: Expr = seq.1.Stmt_Seq!.1.Stmt_Call!
+            var ok: Bool = cal.Expr_Call?
+            var ok1: Bool = cal.Expr_Call!.1.Expr_Var?
+            var ok2: Bool = cal.Expr_Call!.2.Expr_Unit?
+            call _assert _{ok.sub && ok1.sub && ok2.sub}
+        }
+        {
+            var cal: Expr = seq.1.Stmt_Seq!.2.Stmt_Call!
+            var ok: Bool = cal.Expr_Call?
+            var ok1: Bool = cal.Expr_Call!.1.Expr_Nat?
+            var ok2: Bool = cal.Expr_Call!.2.Expr_Unit?
+            call _assert _{ok.sub && ok1.sub && ok2.sub}
+        }
+        {
+            var cal: Expr = seq.2.Stmt_Call!
+            var ok: Bool = cal.Expr_Call?
+            var ok1: Bool = cal.Expr_Call!.1.Expr_Var?
+            var ok2: Bool = cal.Expr_Call!.2.Expr_Unit?
+            call _assert _{ok.sub && ok1.sub && ok2.sub}
+        }
         call close ()
     }
 }
