@@ -112,6 +112,7 @@ native _{
     typedef char Str_Buf[TK_BUF];
     typedef char Err_Buf[ERR_BUF];
     typedef char* String;
+    typedef FILE* FILE_PTR;
 }
 
 type TK_Val {
@@ -135,6 +136,7 @@ func is_reserved: \TK_Val -> Int {
     return 0;
 }
 
+var out: _(FILE*) = ?
 var inp: _(FILE*) = ?
 var lin: Int = ?
 var col: Int = ?
@@ -464,15 +466,35 @@ func check: _TK -> Bool {
     return asbool _(tk1._1 == arg)
 }
 
-func open: _(char*) -> () {
-    set inp = _(stropen("r", 0, arg))
+func open: (_FILE_PTR,_FILE_PTR) -> () {
+    set out = arg.1
+    set inp = arg.2
     set lin = 1;
     set col = 1;
-    call lexer ()
+    if asbool _(inp != NULL) {
+        call lexer ()
+    }
+}
+
+func open_out: (_String,Int) -> () {
+    var out: _FILE_PTR = _(stropen("w", arg._2, arg._1))
+    var inp: _FILE_PTR = _NULL
+    return open (out, inp)
+}
+
+func open_inp: _String -> () {
+    var out: _FILE_PTR = _NULL
+    var inp: _FILE_PTR = _(stropen("r", 0, arg))
+    return open (out, inp)
 }
 
 func close: () -> () {
-    call _fclose inp
+    if asbool _(out != NULL) {
+        call _fclose out
+    }
+    if asbool _(inp != NULL) {
+        call _fclose inp
+    }
 }
 
 -------------------------------------------------------------------------------
@@ -1081,6 +1103,14 @@ func parser_stmts: _TK -> Maybe_Stmt {
     return ret
 }
 
+func parser: () -> Maybe_Stmt {
+    var s: Maybe_Stmt = call parser_stmt ()
+    if not accept_err _TK_EOF {
+        return None_Stmt
+    }
+    return s
+}
+
 -------------------------------------------------------------------------------
 
 func t_lexer: () -> () {
@@ -1327,7 +1357,7 @@ func t_parser_type: () -> () {
     }
     -- TYPE_TUPLE
     {
-        call open _{"((),_char)"}
+        call open_inp _{"((),_char)"}
         var ret: Maybe_Type = call parser_type ()
         var tup: (Bool,List_Type) = ret.Some_Type!.Type_Tuple!
         var nat: _(char*) = tup.2.Item_Type!.2.Item_Type!.1.Type_Nat!.2.2.Str!
@@ -1337,7 +1367,7 @@ func t_parser_type: () -> () {
     }
     -- TYPE_FUNC
     {
-        call open _{"() -> ()"}
+        call open_inp _{"() -> ()"}
         var ret: Maybe_Type = call parser_type ()
         var fun: (Bool,Type,Type) = ret.Some_Type!.Type_Func!
         var ok1: Bool = fun.2.Type_Unit?
@@ -1350,7 +1380,7 @@ func t_parser_type: () -> () {
 func t_parser_expr: () -> () {
     -- EXPR_UNIT
     {
-        call open _{"()"}
+        call open_inp _{"()"}
         var e: Maybe_Expr = call parser_expr True
         var ok: Bool = e.Some_Expr!.Expr_Unit?
         call _assert _(ok.sub)
@@ -1358,7 +1388,7 @@ func t_parser_expr: () -> () {
     }
     -- EXPR_VAR
     {
-        call open _{"x"}
+        call open_inp _{"x"}
         var e: Maybe_Expr = call parser_expr False
         var ok: Bool = e.Some_Expr!.Expr_Var?
         var str: _(char*) = e.Some_Expr!.Expr_Var!.2.Str!
@@ -1367,21 +1397,21 @@ func t_parser_expr: () -> () {
     }
     -- EXPR_PARENS
     {
-        call open _{"(())"}
+        call open_inp _{"(())"}
         var e: Maybe_Expr = call parser_expr True
         var ok: Bool = e.Some_Expr!.Expr_Unit?
         call _assert _(ok.sub)
         call close ()
     }
     {
-        call open _{"("}
+        call open_inp _{"("}
         var e: Maybe_Expr = call parser_expr False
         var ok: Bool = e.None_Expr?
         call _assert _{ok.sub && !strcmp(err,"(ln 1, col 2): expected expression : have end of file")}
         call close ()
     }
     {
-        call open _{"(x"}
+        call open_inp _{"(x"}
         var e: Maybe_Expr = call parser_expr True
         var ok: Bool = e.None_Expr?
         call _assert _{ok.sub && !strcmp(err,"(ln 1, col 3): expected `,´ : have end of file")}
@@ -1389,7 +1419,7 @@ func t_parser_expr: () -> () {
     }
     -- EXPR_NATIVE
     {
-        call open _{"_x"}
+        call open_inp _{"_x"}
         var e: Maybe_Expr = call parser_expr False
         var ok: Bool = e.Some_Expr?
         var str: _(char*) = e.Some_Expr!.Expr_Nat!.2.Str!
@@ -1398,14 +1428,14 @@ func t_parser_expr: () -> () {
     }
     -- EXPR_TUPLE
     {
-        call open _{"((),x,"}
+        call open_inp _{"((),x,"}
         var e: Maybe_Expr = call parser_expr True
         var ok: Bool = e.None_Expr?
         call _assert _{ok.sub && !strcmp(err,"(ln 1, col 7): expected expression : have end of file")}
         call close ()
     }
     {
-        call open _{"((),x,())"}
+        call open_inp _{"((),x,())"}
         var e: Maybe_Expr = call parser_expr False
         var ok: Bool = e.Some_Expr?
         var tup: List_Expr = e.Some_Expr!.Expr_Tuple!
@@ -1415,7 +1445,7 @@ func t_parser_expr: () -> () {
     }
     -- EXPR_CALL
     {
-        call open _{"xxx ()"}
+        call open_inp _{"xxx ()"}
         var e: Maybe_Expr = call parser_expr True
         var cal: (Expr,Expr) = e.Some_Expr!.Expr_Call!
         var ok1: Bool = cal.1.Expr_Var?
@@ -1425,7 +1455,7 @@ func t_parser_expr: () -> () {
         call close ()
     }
     {
-        call open _{"call xxx ()"}
+        call open_inp _{"call xxx ()"}
         var e: Maybe_Expr = call parser_expr True
 --output std (\e)
         var cal: (Expr,Expr) = e.Some_Expr!.Expr_Call!
@@ -1436,7 +1466,7 @@ func t_parser_expr: () -> () {
         call close ()
     }
     {
-        call open _{"f()\n()\n()"}
+        call open_inp _{"f()\n()\n()"}
         var e: Maybe_Expr = call parser_expr True
         var cal: (Expr,Expr) = e.Some_Expr!.Expr_Call!
         var ok1: Bool = cal.1.Expr_Var?
@@ -1447,7 +1477,7 @@ func t_parser_expr: () -> () {
     }
     -- EXPR_CONS
     {
-        call open _{"True ()"}
+        call open_inp _{"True ()"}
         var e: Maybe_Expr = call parser_expr True
         var cons: ((Int,TK_Val,Int,Int),Expr) = e.Some_Expr!.Expr_Cons!
         var str: _(char*) = cons.1.2.Str!
@@ -1456,7 +1486,7 @@ func t_parser_expr: () -> () {
         call close ()
     }
     {
-        call open _{"Zz1 ((),())"}
+        call open_inp _{"Zz1 ((),())"}
         var e: Maybe_Expr = call parser_expr True
         var cons: ((Int,TK_Val,Int,Int),Expr) = e.Some_Expr!.Expr_Cons!
         var str: _(char*) = cons.1.2.Str!
@@ -1466,7 +1496,7 @@ func t_parser_expr: () -> () {
     }
     -- EXPR_INDEX
     {
-        call open _{"x.1"}
+        call open_inp _{"x.1"}
         var e: Maybe_Expr = call parser_expr True
         var idx: (Expr,(Int,TK_Val,Int,Int)) = e.Some_Expr!.Expr_Index!
         var str: _(char*) = idx.1.Expr_Var!.2.Str!
@@ -1475,7 +1505,7 @@ func t_parser_expr: () -> () {
         call close ()
     }
     {
-        call open _{"x () .10 ()"}  -- x [() .10 ~()~
+        call open_inp _{"x () .10 ()"}  -- x [() .10 ~()~
         var e: Maybe_Expr = call parser_expr True
         var cal: (Expr,Expr) = e.Some_Expr!.Expr_Call!
         var idx: (Expr,(Int,TK_Val,Int,Int)) = cal.2.Expr_Index!
@@ -1486,7 +1516,7 @@ func t_parser_expr: () -> () {
         call close ()
     }
     {
-        call open _{"x().."}
+        call open_inp _{"x().."}
         var e: Maybe_Expr = call parser_expr True
         var ok: Bool = e.None_Expr?
         call _assert _{ok.sub && !strcmp(err,"(ln 1, col 5): expected index or subtype : have `.´")}
@@ -1494,7 +1524,7 @@ func t_parser_expr: () -> () {
     }
     -- EXPR_DNREF
     {
-        call open _{"x\\.1"}
+        call open_inp _{"x\\.1"}
         var e: Maybe_Expr = call parser_expr True
         var idx: (Expr,(Int,TK_Val,Int,Int)) = e.Some_Expr!.Expr_Index!
         var dn:  Expr = idx.1.Expr_Dnref!
@@ -1503,7 +1533,7 @@ func t_parser_expr: () -> () {
         call close ()
     }
     {
-        call open _{"()\\"}
+        call open_inp _{"()\\"}
         var e: Maybe_Expr = call parser_expr True
         var ok: Bool = e.None_Expr?
         call _assert _{ok.sub && !strcmp(err,"(ln 1, col 3): unexpected operand to `\\´")}
@@ -1511,7 +1541,7 @@ func t_parser_expr: () -> () {
     }
     -- EXPR_UPREF
     {
-        call open _{"\\x.1"}
+        call open_inp _{"\\x.1"}
         var e: Maybe_Expr = call parser_expr True
         var up: Expr = e.Some_Expr!.Expr_Upref!
         var idx: (Expr,(Int,TK_Val,Int,Int)) = up.Expr_Index!
@@ -1520,7 +1550,7 @@ func t_parser_expr: () -> () {
         call close ()
     }
     {
-        call open _{"\\()"}
+        call open_inp _{"\\()"}
         var e: Maybe_Expr = call parser_expr True
         var ok: Bool = e.None_Expr?
         call _assert _{ok.sub && !strcmp(err,"(ln 1, col 2): unexpected operand to `\\´")}
@@ -1528,7 +1558,7 @@ func t_parser_expr: () -> () {
     }
     -- EXPR_UNK
     {
-        call open _{"?"}
+        call open_inp _{"?"}
         var e: Maybe_Expr = call parser_expr True
         var ok: Bool = e.Some_Expr!.Expr_Unk?
         call _assert _{ok.sub}
@@ -1536,7 +1566,7 @@ func t_parser_expr: () -> () {
     }
     -- EXPR_EMPTY
     {
-        call open _{"$Nat"}
+        call open_inp _{"$Nat"}
         var e: Maybe_Expr = call parser_expr True
         var str: _(char*) = e.Some_Expr!.Expr_Empty!.2.Str!
         call _assert _{!strcmp(str,"Nat")}
@@ -1544,7 +1574,7 @@ func t_parser_expr: () -> () {
     }
     -- EXPR_INT
     {
-        call open _{"10"}
+        call open_inp _{"10"}
         var e: Maybe_Expr = call parser_expr True
         var n: Int = e.Some_Expr!.Expr_Int!.2.Num!
         call _assert _{n == 10}
@@ -1552,7 +1582,7 @@ func t_parser_expr: () -> () {
     }
     -- EXPR_DISC
     {
-        call open _{"x.Item!"}
+        call open_inp _{"x.Item!"}
         var e: Maybe_Expr = call parser_expr True
         var disc: (Expr,(Int,TK_Val,Int,Int)) = e.Some_Expr!.Expr_Disc!
         var ok1: Bool = disc.1.Expr_Var?
@@ -1562,7 +1592,7 @@ func t_parser_expr: () -> () {
     }
     -- EXPR_PRED
     {
-        call open _{"x.Item?"}
+        call open_inp _{"x.Item?"}
         var e: Maybe_Expr = call parser_expr True
         var disc: (Expr,(Int,TK_Val,Int,Int)) = e.Some_Expr!.Expr_Pred!
         var ok1: Bool = disc.1.Expr_Var?
@@ -1575,7 +1605,7 @@ func t_parser_expr: () -> () {
 func t_parser_stmt: () -> () {
     -- STMT_VAR
     {
-        call open _{"var x: () = ()"}
+        call open_inp _{"var x: () = ()"}
         var s: Maybe_Stmt = call parser_stmt ()
         var ok: Bool = s.Some_Stmt?
         var str1: _(char*) = s.Some_Stmt!.Stmt_Var!.1.2.Str!
@@ -1586,7 +1616,7 @@ func t_parser_stmt: () -> () {
     }
     -- STMT_USER
     {
-        call open _{"type Bool { False:() ; True:() }"}
+        call open_inp _{"type Bool { False:() ; True:() }"}
         var s: Maybe_Stmt = call parser_stmt ()
         var user: (Bool, (Int,TK_Val,Int,Int), List_Sub) = s.Some_Stmt!.Stmt_User!
         var str: _(char*) = user.2.2.Str!
@@ -1596,7 +1626,7 @@ func t_parser_stmt: () -> () {
     }
     -- STMT_CALL
     {
-        call open _{"call f()"}
+        call open_inp _{"call f()"}
         var s: Maybe_Stmt = call parser_stmt ()
         var cal: Expr = s.Some_Stmt!.Stmt_Call!
         var ok: Bool = cal.Expr_Call?
@@ -1606,7 +1636,7 @@ func t_parser_stmt: () -> () {
         call close ()
     }
     {
-        call open _{"call _printf ()"}
+        call open_inp _{"call _printf ()"}
         var s: Maybe_Stmt = call parser_stmt ()
         var cal: Expr = s.Some_Stmt!.Stmt_Call!
         var ok: Bool = cal.Expr_Call?
@@ -1617,7 +1647,7 @@ func t_parser_stmt: () -> () {
     }
     -- STMT_SEQ
     {
-        call open _{"call f() ; call _printf () ; call g()"}
+        call open_inp _{"call f() ; call _printf () ; call g()"}
         var s: Maybe_Stmt = call parser_stmts _TK_EOF
         var seq: (Stmt,Stmt) = s.Some_Stmt!.Stmt_Seq!
         {
@@ -1645,7 +1675,7 @@ func t_parser_stmt: () -> () {
     }
     -- STMT_BLOCK
     {
-        call open _{"{ call f() }"}
+        call open_inp _{"{ call f() }"}
         var s: Maybe_Stmt = call parser_stmt ()
         var blk: Stmt = s.Some_Stmt!.Stmt_Block!
         var ok: Bool = blk.Stmt_Call?
@@ -1654,7 +1684,7 @@ func t_parser_stmt: () -> () {
     }
     -- STMT_IF
     {
-        call open _{"if () {} else { call f() }"}
+        call open_inp _{"if () {} else { call f() }"}
         var s: Maybe_Stmt = call parser_stmt ()
         var if_: (Expr,Stmt,Stmt) = s.Some_Stmt!.Stmt_If!
         var ok: Bool = if_.1.Expr_Unit?
@@ -1665,7 +1695,7 @@ func t_parser_stmt: () -> () {
     }
     -- STMT_FUNC, STMT_RET
     {
-        call open _{"func f : () -> () { return () }"}
+        call open_inp _{"func f : () -> () { return () }"}
         var s: Maybe_Stmt = call parser_stmt ()
         var f: ((Int,TK_Val,Int,Int),Type,Maybe_Stmt) = s.Some_Stmt!.Stmt_Func!
         var str: _(char*) = f.1.2.Str!
@@ -1675,7 +1705,7 @@ func t_parser_stmt: () -> () {
         call close ()
     }
     {
-        call open _{"func pre f : () -> ()"}
+        call open_inp _{"func pre f : () -> ()"}
         var s: Maybe_Stmt = call parser_stmt ()
         var f: ((Int,TK_Val,Int,Int),Type,Maybe_Stmt) = s.Some_Stmt!.Stmt_Func!
         var str: _(char*) = f.1.2.Str!
@@ -1686,7 +1716,7 @@ func t_parser_stmt: () -> () {
     }
     -- STMT_NAT
     {
-        call open _{"native pre _{xxx}"}
+        call open_inp _{"native pre _{xxx}"}
         var s: Maybe_Stmt = call parser_stmt ()
         var nat: (Bool,(Int,TK_Val,Int,Int)) = s.Some_Stmt!.Stmt_Nat!
         var ok: Bool = nat.1
@@ -1696,7 +1726,7 @@ func t_parser_stmt: () -> () {
     }
     -- STMT_LOOP, STMT_BREAK
     {
-        call open _{"loop { break }"}
+        call open_inp _{"loop { break }"}
         var s: Maybe_Stmt = call parser_stmt ()
         var lop: Stmt = s.Some_Stmt!.Stmt_Loop!
         var ok: Bool = lop.Stmt_Block!.Stmt_Break?
@@ -1705,7 +1735,7 @@ func t_parser_stmt: () -> () {
     }
     -- STMT_SET
     {
-        call open _{"set s = ()"}
+        call open_inp _{"set s = ()"}
         var s: Maybe_Stmt = call parser_stmt ()
         var ss: (Expr,Expr) = s.Some_Stmt!.Stmt_Set!
         var ok1: Bool = ss.1.Expr_Var?
@@ -1715,7 +1745,17 @@ func t_parser_stmt: () -> () {
     }
 }
 
+func t_code: () -> () {
+    -- EXPR_UNIT
+    {
+        native _{ char out[256]; }
+        var s: _String = _out
+        call open_out (s,256)
+    }
+}
+
 call t_lexer  ()
 call t_parser_type ()
 call t_parser_expr ()
 call t_parser_stmt ()
+call t_code ()
