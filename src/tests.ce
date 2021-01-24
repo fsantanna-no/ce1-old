@@ -792,7 +792,7 @@ func parser_expr: Bool -> Maybe_Expr {
 -------------------------------------------------------------------------------
 
 type rec Stmt {
-    Stmt_Var: ((Int,TK_Val,Int,Int), (Int,TK_Val,Int,Int), Type, Expr)
+    Stmt_Var: ((Int,TK_Val,Int,Int), Type, Expr)
 }
 
 type Maybe_Stmt {
@@ -801,7 +801,7 @@ type Maybe_Stmt {
 }
 
 func parser_stmt: () -> Maybe_Stmt {
-    var tk_pre: (Int,TK_Val,Int,Int) = tk0
+    --var tk_pre: (Int,TK_Val,Int,Int) = tk0
 
     if accept _TK_VAR {
         if not accept_err _TX_VAR {
@@ -822,7 +822,7 @@ func parser_stmt: () -> Maybe_Stmt {
         if e.None_Expr? {
             return None_Stmt
         }
-        return Some_Stmt Stmt_Var (tk_pre,tk_id,tp.Some_Type!,e.Some_Expr!)
+        return Some_Stmt Stmt_Var (tk_id,tp.Some_Type!,e.Some_Expr!)
     }
 
     call _assert 0
@@ -1324,11 +1324,11 @@ func t_parser_stmt: () -> () {
     {
         call open _{"var x: () = ()"}
         var s: Maybe_Stmt = call parser_stmt ()
-        var ok1: Bool = s.Some_Stmt?
-        var str2: _(char*) = s.Some_Stmt!.Stmt_Var!.2.2.Str!
-        var ok3: Bool = s.Some_Stmt!.Stmt_Var!.3.Type_Unit?
-        var ok4: Bool = s.Some_Stmt!.Stmt_Var!.4.Expr_Unit?
-        call _assert _{ok1.sub && ok3.sub && ok4.sub && !strcmp(str2,"x")}
+        var ok: Bool = s.Some_Stmt?
+        var str1: _(char*) = s.Some_Stmt!.Stmt_Var!.1.2.Str!
+        var ok2: Bool = s.Some_Stmt!.Stmt_Var!.2.Type_Unit?
+        var ok3: Bool = s.Some_Stmt!.Stmt_Var!.3.Expr_Unit?
+        call _assert _{ok.sub && ok2.sub && ok3.sub && !strcmp(str1,"x")}
         call close ()
     }
 }
