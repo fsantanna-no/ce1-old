@@ -817,6 +817,8 @@ type rec Stmt {
     Stmt_Func:  ((Int,TK_Val,Int,Int), Type, Maybe_Stmt)
     Stmt_Ret:   Expr
     Stmt_Nat:   (Bool,(Int,TK_Val,Int,Int))
+    Stmt_Loop:  Stmt
+    Stmt_Break: ()
 }
 
 type rec Maybe_Stmt {
@@ -958,6 +960,20 @@ func parser_stmt: () -> Maybe_Stmt {
         } else {
             return Some_Stmt Stmt_If (tst.Some_Expr!,t.Some_Stmt!,Stmt_Pass)
         }
+    }
+
+    -- STMT_BREAK
+    if accept _TK_BREAK {
+        return Some_Stmt Stmt_Break
+    }
+
+    -- STMT_LOOP
+    if accept _TK_LOOP {
+        var blk: Maybe_Stmt = call parser_block ()
+        if blk.None_Stmt? {
+            return None_Stmt
+        }
+        return Some_Stmt Stmt_Loop blk.Some_Stmt!
     }
 
     -- STMT_FUNC
@@ -1659,6 +1675,15 @@ func t_parser_stmt: () -> () {
         var ok: Bool = nat.1
         var str: _(char*) = nat.2.2.Str!
         call _assert _{ok.sub && !strcmp(str,"xxx")}
+        call close ()
+    }
+    -- STMT_LOOP, STMT_BREAK
+    {
+        call open _{"loop { break }"}
+        var s: Maybe_Stmt = call parser_stmt ()
+        var lop: Stmt = s.Some_Stmt!.Stmt_Loop!
+        var ok: Bool = lop.Stmt_Block!.Stmt_Break?
+        call _assert _{ok.sub}
         call close ()
     }
 }
