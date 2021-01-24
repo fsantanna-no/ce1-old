@@ -57,7 +57,7 @@ native _{
 
         TX_NATIVE,
         TX_VAR,
-        TX_NULL,
+        TX_EMPTY,
         TX_USER,
         TX_NUM,
 
@@ -191,7 +191,7 @@ func lexer_tk2str: (Int,TK_Val,Int,Int) -> _(const char*) {
         native _{ sprintf(str, "\"%d\"", arg._2._Num); }
         return _str
     }
-    if asbool _(arg._1==TX_VAR || arg._1==TX_USER || arg._1==TX_NULL || arg._1==TK_ERR) {
+    if asbool _(arg._1==TX_VAR || arg._1==TX_USER || arg._1==TX_EMPTY || arg._1==TK_ERR) {
         native _{ sprintf(str, "\"%s\"", arg._2._Str); }
         return _str
     }
@@ -364,7 +364,18 @@ func lx_token: () -> () {
         return ()
     }
 
-    -- TX_VAR, TX_USER
+    -- TX_EMPTY, TX_VAR, TX_USER
+    var isdollar: Bool = asbool _(c == '$')
+    if isdollar {
+        set c = _fgetc _inp
+        if asbool _(!isupper(c)) {
+            native _{ tk1._2._Str[0] = '$'; }
+            native _{ tk1._2._Str[1] = c; }
+            native _{ tk1._2._Str[2] = '\0'; }
+            set tk1.1 = _TK_ERR
+            return ()
+        }
+    }
     if asbool _(isalpha(c)) {
         var i: Int = 0
         loop {
@@ -385,6 +396,12 @@ func lx_token: () -> () {
             return ()
         }
 
+        -- TX_EMPTY
+        if isdollar {
+            set tk1.1 = _TX_EMPTY
+            return ()
+        }
+
         -- TX_VAR
         if asbool _(islower(tk1._2._Str[0])) {
             set tk1.1 = _TX_VAR
@@ -396,6 +413,7 @@ func lx_token: () -> () {
             set tk1.1 = _TX_USER
             return ()
         }
+
         call _assert 0
     }
 
@@ -462,12 +480,12 @@ type rec List_Type {                        -- CE2: generic
 }
 
 type rec Type {                             -- CE2: subtype isrec=Bool
-    Type_Any:    Bool
-    Type_Unit:   Bool
-    Type_Native: (Bool, (Int,TK_Val,Int,Int))
-    Type_User:   (Bool, (Int,TK_Val,Int,Int))
-    Type_Tuple:  (Bool, List_Type)
-    Type_Func:   (Bool, Type, Type)
+    Type_Any:   Bool
+    Type_Unit:  Bool
+    Type_Nat:   (Bool, (Int,TK_Val,Int,Int))
+    Type_User:  (Bool, (Int,TK_Val,Int,Int))
+    Type_Tuple: (Bool, List_Type)
+    Type_Func:  (Bool, Type, Type)
 }
 
 type Maybe_Type {                           -- CE2: generic
@@ -488,7 +506,7 @@ func parser_type: () -> Maybe_Type {
 
         -- TYPE_NATIVE
         if accept _TX_NATIVE {
-            return Some_Type Type_Native (isalias, tk0)
+            return Some_Type Type_Nat (isalias, tk0)
         }
 
         -- TYPE_PARENS / TYPE_TUPLE
@@ -561,15 +579,20 @@ type rec List_Expr {
 }
 
 type rec Expr {                             -- CE2: subtype isrec=Bool
-    Expr_Unit:   (Int,TK_Val,Int,Int)
-    Expr_Var:    (Int,TK_Val,Int,Int)
-    Expr_Native: (Int,TK_Val,Int,Int)
-    Expr_Tuple:  List_Expr
-    Expr_Call:   (Expr,Expr)
-    Expr_Cons:   ((Int,TK_Val,Int,Int),Expr)
-    Expr_Index:  (Expr,(Int,TK_Val,Int,Int))
-    Expr_Upref:  Expr
-    Expr_Dnref:  Expr
+    Expr_Unit:  (Int,TK_Val,Int,Int)
+    Expr_Unk:   (Int,TK_Val,Int,Int)
+    Expr_Nat:   (Int,TK_Val,Int,Int)
+    Expr_Empty: (Int,TK_Val,Int,Int)
+    Expr_Int:   (Int,TK_Val,Int,Int)
+    Expr_Var:   (Int,TK_Val,Int,Int)
+    Expr_Upref: Expr
+    Expr_Dnref: Expr
+    Expr_Tuple: List_Expr
+    Expr_Index: (Expr,(Int,TK_Val,Int,Int))
+    Expr_Call:  (Expr,Expr)
+    Expr_Cons:  ((Int,TK_Val,Int,Int),Expr)
+    Expr_Disc:  (Expr,(Int,TK_Val,Int,Int))
+    Expr_Pred:  (Expr,(Int,TK_Val,Int,Int))
 }
 
 type Maybe_Expr {
@@ -585,6 +608,16 @@ func parser_expr_: () -> Maybe_Expr {
         return Some_Expr Expr_Unit tk0
     }
 
+    -- EXPR_UNK
+    if accept _('?') {
+        return Some_Expr Expr_Unk tk0
+    }
+
+    -- EXPR_EMPTY
+    if accept _TX_EMPTY {
+        return Some_Expr Expr_Empty tk0
+    }
+
     -- EXPR_VAR
     if accept _TX_VAR {
         return Some_Expr Expr_Var tk0
@@ -592,7 +625,7 @@ func parser_expr_: () -> Maybe_Expr {
 
     -- EXPR_NATIVE
     if accept _TX_NATIVE {
-        return Some_Expr Expr_Native tk0
+        return Some_Expr Expr_Nat tk0
     }
 
     -- EXPR_UPREF
@@ -602,7 +635,7 @@ func parser_expr_: () -> Maybe_Expr {
         if e.None_Expr? {
             return None_Expr
         }
-        var ok: Bool = or (e.Some_Expr!.Expr_Native?,
+        var ok: Bool = or (e.Some_Expr!.Expr_Nat?,
                        or (e.Some_Expr!.Expr_Var?,
                        or (e.Some_Expr!.Expr_Index?, False)))
                        --or (e.Some_Expr!.Expr_Disc?, False)))))))
@@ -693,7 +726,7 @@ func parser_expr: Bool -> Maybe_Expr {
         } else {
             if accept _('\\') {
                 -- EXPR_DNREF
-                var ok: Bool = or (ret.Some_Expr!.Expr_Native?,
+                var ok: Bool = or (ret.Some_Expr!.Expr_Nat?,
                                or (ret.Some_Expr!.Expr_Var?,
                                or (ret.Some_Expr!.Expr_Upref?,
                                or (ret.Some_Expr!.Expr_Dnref?,
@@ -711,7 +744,7 @@ func parser_expr: Bool -> Maybe_Expr {
             } else {
                 -- EXPR_CALL
                 var ok: Bool = False
-                if or (ret.Some_Expr!.Expr_Var?, ret.Some_Expr!.Expr_Native?) {
+                if or (ret.Some_Expr!.Expr_Var?, ret.Some_Expr!.Expr_Nat?) {
                     var tk_bef: (Int,TK_Val,Int,Int) = tk0
                     var e: Maybe_Expr = parser_expr False
                     if e.Some_Expr? {
@@ -926,6 +959,18 @@ func t_lexer: () -> () {
         call _assert _(n == 10)
         call _fclose inp
     }
+
+    -- TX_EMPTY
+    {
+        set inp = _(stropen("r", 0, "$List"))
+        set lin = 1;
+        set col = 1;
+        call lexer () ; native _{
+            assert(tk1._1 == TX_EMPTY);
+            assert(!strcmp(tk1._2._Str,"List"));
+        }
+        call _fclose inp
+    }
 }
 
 func t_parser_type: () -> () {
@@ -961,8 +1006,8 @@ func t_parser_type: () -> () {
         call lexer ()
         var ret: Maybe_Type = call parser_type ()
         var ok: Bool = ret.Some_Type?
-        var tp: Bool = ret.Some_Type!.Type_Native?
-        var id: _(char*) = ret.Some_Type!.Type_Native!.2.2.Str!
+        var tp: Bool = ret.Some_Type!.Type_Nat?
+        var id: _(char*) = ret.Some_Type!.Type_Nat!.2.2.Str!
         call _assert _(ok.sub && tp.sub)
         call _assert _(!strcmp(id,"char"))
         call _fclose inp
@@ -972,7 +1017,7 @@ func t_parser_type: () -> () {
         call open _{"((),_char)"}
         var ret: Maybe_Type = call parser_type ()
         var tup: (Bool,List_Type) = ret.Some_Type!.Type_Tuple!
-        var nat: _(char*) = tup.2.Item_Type!.2.Item_Type!.1.Type_Native!.2.2.Str!
+        var nat: _(char*) = tup.2.Item_Type!.2.Item_Type!.1.Type_Nat!.2.2.Str!
         var ok: Bool = tup.2.Item_Type!.2.Item_Type!.2.$List_Type?
         call _assert _(ok.sub && !strcmp(nat,"char"))
         call close ()
@@ -1034,7 +1079,7 @@ func t_parser_expr: () -> () {
         call open _{"_x"}
         var e: Maybe_Expr = call parser_expr False
         var ok: Bool = e.Some_Expr?
-        var str: _(char*) = e.Some_Expr!.Expr_Native!.2.Str!
+        var str: _(char*) = e.Some_Expr!.Expr_Nat!.2.Str!
         call _assert _(ok.sub && !strcmp(str,"x"))
         call close ()
     }
@@ -1168,6 +1213,25 @@ func t_parser_expr: () -> () {
         call _assert _{ok.sub && !strcmp(err,"(ln 1, col 2): unexpected operand to `\\´")}
         call close ()
     }
+    -- EXPR_UNK
+    {
+        call open _{"?"}
+        var e: Maybe_Expr = call parser_expr True
+        var ok: Bool = e.Some_Expr!.Expr_Unk?
+        call _assert _{ok.sub}
+        call close ()
+    }
+    -- EXPR_EMPTY
+    {
+        call open _{"$Nat"}
+        var e: Maybe_Expr = call parser_expr True
+        var str: _(char*) = e.Some_Expr!.Expr_Empty!.2.Str!
+        call _assert _{!strcmp(str,"Nat")}
+        call close ()
+    }
+    -- EXPR_INT
+    -- EXPR_DISC
+    -- EXPR_PRED
 }
 
 call t_lexer  ()
