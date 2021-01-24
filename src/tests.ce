@@ -136,8 +136,8 @@ func is_reserved: \TK_Val -> Int {
     return 0;
 }
 
-var out: _(FILE*) = ?
-var inp: _(FILE*) = ?
+var fout: _(FILE*) = ?
+var finp: _(FILE*) = ?
 var lin: Int = ?
 var col: Int = ?
 var tk0: (Int,TK_Val,Int,Int) = ?   -- enu, val, lin, col   // CE2: typedef
@@ -210,26 +210,26 @@ func lexer_tk2str: (Int,TK_Val,Int,Int) -> _(const char*) {
 
 func lx_blanks: () -> () {
     loop {
-        var c: Int = _fgetc _inp
+        var c: Int = call _fgetc finp
         if asbool _(c == '-') {
-            set c = _fgetc _inp
+            set c = call _fgetc finp
             if asbool _(c == '-') {                 -- ignore comments
                 set col = _(col + 1)
                 set col = _(col + 1)
                 loop {
-                    set c = _fgetc _inp
+                    set c = call _fgetc finp
                     if asbool _(c == EOF) {         -- EOF stops comment
                         break
                     }
                     if asbool _(c == '\n') {        -- LN stops comment
-                        native _(ungetc(c, inp);)
+                        native _(ungetc(c, finp);)
                         break
                     }
                     set col = _(col + 1)
                 }
             } else {
-                native _(ungetc(c, inp);)
-                native _(ungetc('-', inp);)
+                native _(ungetc(c, finp);)
+                native _(ungetc('-', finp);)
                 return ()
             }
         } else {
@@ -240,7 +240,7 @@ func lx_blanks: () -> () {
                 if asbool _(c == ' ') {             -- ignore new spaces
                     set col = _(col + 1)
                 } else {
-                    native _(ungetc(c, inp);)
+                    native _(ungetc(c, finp);)
                     return ()
                 }
             }
@@ -249,7 +249,7 @@ func lx_blanks: () -> () {
 }
 
 func lx_token: () -> () {
-    var c: Int = _fgetc _inp
+    var c: Int = call _fgetc finp
 
     -- SYMBOLS
     if asbool _{c=='{' || c=='}' || c==')'  || c==';' || c==':' || c=='=' ||
@@ -267,21 +267,21 @@ func lx_token: () -> () {
 
     -- '(', TK_UNIT
     if asbool _{c == '('} {
-        set c = _fgetc _inp
+        set c = call _fgetc finp
         if asbool _{c == ')'} {
             set tk1.2 = Str ?
             native _{strcpy(tk1._2._Str, "()");}
             set tk1.1 = _TK_UNIT
             return ()
         }
-        native _(ungetc(c, inp);)
+        native _(ungetc(c, finp);)
         set tk1.1 = _{'('}
         return ()
     }
 
     -- TK_ARROW
     if asbool _(c == '-') {
-        set c = _fgetc _inp
+        set c = call _fgetc finp
         if asbool _(c == '>') {
             set tk1.1 = _TK_ARROW
             return ()
@@ -291,7 +291,7 @@ func lx_token: () -> () {
 
     -- TX_NAT
     if asbool _(c == '_') {
-        set c = _fgetc _inp
+        set c = call _fgetc finp
         var open: Int = 0
         var close: Int = 0
         var open_close: Int = 0
@@ -302,7 +302,7 @@ func lx_token: () -> () {
             } else {
                 set close = _('}')
             }
-            set c = _fgetc _inp
+            set c = call _fgetc finp
             set open_close = _(open_close + 1)
         }
 
@@ -326,13 +326,13 @@ func lx_token: () -> () {
             if asbool _(c == '\n') {
                 set lin = _(lin + 1)
             }
-            set c = _fgetc _inp
+            set c = call _fgetc finp
             call _assert _(i < TK_BUF)
         }
 
         native _{ tk1._2._Str[i] = '\0'; }
         if asbool _(!close) {
-            native _(ungetc(c, inp);)
+            native _(ungetc(c, finp);)
         }
 
         set tk1.1 = _TX_NAT
@@ -357,11 +357,11 @@ func lx_token: () -> () {
                 set tk1.1 = _TK_ERR
                 return ()
             }
-            set c = _fgetc _inp
+            set c = call _fgetc finp
         }
         native _{ tk1._2._Str[i] = '\0'; }
         set tk1.2 = Num _atoi tk1.2.Str!
-        native _(ungetc(c, inp);)
+        native _(ungetc(c, finp);)
         set tk1.1 = _TX_NUM
         return ()
     }
@@ -369,7 +369,7 @@ func lx_token: () -> () {
     -- TX_EMPTY, TX_VAR, TX_USER
     var isdollar: Bool = asbool _(c == '$')
     if isdollar {
-        set c = _fgetc _inp
+        set c = call _fgetc finp
         if asbool _(!isupper(c)) {
             native _{ tk1._2._Str[0] = '$'; }
             native _{ tk1._2._Str[1] = c; }
@@ -387,10 +387,10 @@ func lx_token: () -> () {
             native _{ tk1._2._Str[i] = c; }
             set i = _(i + 1)
             call _assert _(i < TK_BUF)
-            set c = _fgetc _inp
+            set c = call _fgetc finp
         }
         native _{ tk1._2._Str[i] = '\0'; }
-        native _(ungetc(c, inp);)
+        native _(ungetc(c, finp);)
 
         var key: Int = call is_reserved(\tk1.2)
         if asbool _(key != 0) {
@@ -427,9 +427,9 @@ func lexer: () -> () {
     call lx_blanks ()
     set tk1.3 = lin
     set tk1.4 = col
-    var bef: Int = call _ftell inp
+    var bef: Int = call _ftell finp
     call lx_token  ()
-    set col = _(col + (ftell(inp) - bef))
+    set col = _(col + (ftell(finp) - bef))
     call lx_blanks ()
 }
 
@@ -467,33 +467,33 @@ func check: _TK -> Bool {
 }
 
 func open: (_FILE_PTR,_FILE_PTR) -> () {
-    set out = arg.1
-    set inp = arg.2
+    set fout = arg.1
+    set finp = arg.2
     set lin = 1;
     set col = 1;
-    if asbool _(inp != NULL) {
+    if asbool _(finp != NULL) {
         call lexer ()
     }
 }
 
 func open_out: (_String,Int) -> () {
-    var out: _FILE_PTR = _(stropen("w", arg._2, arg._1))
-    var inp: _FILE_PTR = _NULL
-    return open (out, inp)
+    var fout: _FILE_PTR = _(stropen("w", arg._2, arg._1))
+    var finp: _FILE_PTR = _NULL
+    return open (fout, finp)
 }
 
 func open_inp: _String -> () {
-    var out: _FILE_PTR = _NULL
-    var inp: _FILE_PTR = _(stropen("r", 0, arg))
-    return open (out, inp)
+    var fout: _FILE_PTR = _NULL
+    var finp: _FILE_PTR = _(stropen("r", 0, arg))
+    return open (fout, finp)
 }
 
 func close: () -> () {
-    if asbool _(out != NULL) {
-        call _fclose out
+    if asbool _(fout != NULL) {
+        call _fclose fout
     }
-    if asbool _(inp != NULL) {
-        call _fclose inp
+    if asbool _(finp != NULL) {
+        call _fclose finp
     }
 }
 
@@ -1113,65 +1113,73 @@ func parser: () -> Maybe_Stmt {
 
 -------------------------------------------------------------------------------
 
+func code_expr: \Expr -> () {
+    if arg\.Expr_Unit? {
+    }
+    return ()
+}
+
+-------------------------------------------------------------------------------
+
 func t_lexer: () -> () {
     -- COMMENTS
     {
-        set inp = _{stropen("r", 0, "--foobar")}
+        set finp = _{stropen("r", 0, "--foobar")}
         {
-            var c: Int = call _fgetc inp
+            var c: Int = call _fgetc finp
             native _(assert(c == '-');)
-            native _(ungetc(c,inp);)
+            native _(ungetc(c,finp);)
         }
         {
             call lx_blanks ()
-            var c: Int = call _fgetc inp
+            var c: Int = call _fgetc finp
             native _(assert(c == EOF);)
         }
-        call _fclose inp
+        call _fclose finp
     }
     {
-        set inp = _{stropen("r", 0, "-- foobar")}
+        set finp = _{stropen("r", 0, "-- foobar")}
         set lin = 1;
         set col = 1;
         call lx_blanks ()
         native _(assert(lin == 1);)
         native _(assert(col == 10);)
-        call _fclose inp
+        call _fclose finp
     }
     {
-        set inp = _{stropen("r", 0, "-- c1\n--c2\n\n")}
+        set finp = _{stropen("r", 0, "-- c1\n--c2\n\n")}
         set lin = 1;
         set col = 1;
         call lx_blanks ()
         native _(assert(lin == 4);)
         native _(assert(col == 1);)
-        call _fclose inp
+        call _fclose finp
     }
 
     -- SYMBOLS
     {
-        set inp = _{stropen("r", 0, "( -> ,")}
+        set finp = _{stropen("r", 0, "( -> ,")}
         set lin = 1;
         set col = 1;
         call lexer () ; native _{assert(tk1._1 == '(');}
         call lexer () ; native _{assert(tk1._1 == TK_ARROW);}
         call lexer () ; native _{assert(tk1._1 == ',');}
-        call _fclose inp
+        call _fclose finp
     }
     {
-        set inp = _(stropen("r", 0, ": }{ :"))
+        set finp = _(stropen("r", 0, ": }{ :"))
         set lin = 1;
         set col = 1;
         call lexer () ; native _(assert(tk1._1 == ':');)
         call lexer () ; native _(assert(tk1._1 == '}');)
         call lexer () ; native _(assert(tk1._1 == '{');)
         call lexer () ; native _(assert(tk1._1 == ':');)
-        call _fclose inp
+        call _fclose finp
     }
 
     -- KEYWORDS
     {
-        set inp = _(stropen("r", 0, "xvar var else varx type"))
+        set finp = _(stropen("r", 0, "xvar var else varx type"))
         set lin = 1;
         set col = 1;
         call lexer () ; native _(assert(tk1._1 == TX_VAR);)
@@ -1179,12 +1187,12 @@ func t_lexer: () -> () {
         call lexer () ; native _(assert(tk1._1 == TK_ELSE);)
         call lexer () ; native _(assert(tk1._1 == TX_VAR);)
         call lexer () ; native _(assert(tk1._1 == TK_TYPE);)
-        call _fclose inp
+        call _fclose finp
     }
 
     -- TX_VAR / TX_USER
     {
-        set inp = _(stropen("r", 0, "c1\nc2 c3  \n    \nc4"))
+        set finp = _(stropen("r", 0, "c1\nc2 c3  \n    \nc4"))
         set lin = 1;
         set col = 1;
         call lexer () ; native _{
@@ -1211,10 +1219,10 @@ func t_lexer: () -> () {
             assert(tk1._3 == 4);
             assert(tk1._4 == 1);
         }
-        call _fclose inp
+        call _fclose finp
     }
     {
-        set inp = _(stropen("r", 0, "c1 C1 Ca a C"))
+        set finp = _(stropen("r", 0, "c1 C1 Ca a C"))
         set lin = 1;
         set col = 1;
         call lexer () ; native _{
@@ -1247,22 +1255,22 @@ func t_lexer: () -> () {
             assert(tk1._3 == 1);
             assert(tk1._4 == 12);
         }
-        call _fclose inp
+        call _fclose finp
     }
 
     -- TX_NAT
     {
-        set inp = _(stropen("r", 0, "_char _Tp"))
+        set finp = _(stropen("r", 0, "_char _Tp"))
         set lin = 1;
         set col = 1;
         call lexer () ; native _{
             assert(tk1._1 == TX_NAT);
             assert(!strcmp(tk1._2._Str,"char"));
         }
-        call _fclose inp
+        call _fclose finp
     }
     {
-        set inp = _(stropen("r", 0, "_{(1)} _(2+2)"))
+        set finp = _(stropen("r", 0, "_{(1)} _(2+2)"))
         set lin = 1;
         set col = 1;
         call lexer () ; native _{
@@ -1273,12 +1281,12 @@ func t_lexer: () -> () {
             assert(tk1._1 == TX_NAT);
             assert(!strcmp(tk1._2._Str,"2+2"));
         }
-        call _fclose inp
+        call _fclose finp
     }
 
     -- TX_NUM
     {
-        set inp = _(stropen("r", 0, ".1a"))
+        set finp = _(stropen("r", 0, ".1a"))
         set lin = 1;
         set col = 1;
         call lexer () ; native _{
@@ -1287,10 +1295,10 @@ func t_lexer: () -> () {
         call lexer () ; native _{
             assert(tk1._1 == TK_ERR);
         }
-        call _fclose inp
+        call _fclose finp
     }
     {
-        set inp = _(stropen("r", 0, ".10"))
+        set finp = _(stropen("r", 0, ".10"))
         set lin = 1;
         set col = 1;
         call lexer () ; native _{
@@ -1300,26 +1308,26 @@ func t_lexer: () -> () {
         call _assert _(tk1._1 == TX_NUM)
         var n: Int = tk1.2.Num!
         call _assert _(n == 10)
-        call _fclose inp
+        call _fclose finp
     }
 
     -- TX_EMPTY
     {
-        set inp = _(stropen("r", 0, "$List"))
+        set finp = _(stropen("r", 0, "$List"))
         set lin = 1;
         set col = 1;
         call lexer () ; native _{
             assert(tk1._1 == TX_EMPTY);
             assert(!strcmp(tk1._2._Str,"List"));
         }
-        call _fclose inp
+        call _fclose finp
     }
 }
 
 func t_parser_type: () -> () {
     -- ERROR
     {
-        set inp = _(stropen("r", 0, "xxx"))
+        set finp = _(stropen("r", 0, "xxx"))
         set lin = 1;
         set col = 1;
         call lexer ()
@@ -1327,11 +1335,11 @@ func t_parser_type: () -> () {
         var ok: Bool = ret.None_Type?
         call _assert _(ok.sub)
         call _assert _{!strcmp(err,"(ln 1, col 1): expected type : have \"xxx\"")}
-        call _fclose inp
+        call _fclose finp
     }
     -- TYPE_UNIT
     {
-        set inp = _(stropen("r", 0, "()"))
+        set finp = _(stropen("r", 0, "()"))
         set lin = 1;
         set col = 1;
         call lexer ()
@@ -1339,11 +1347,11 @@ func t_parser_type: () -> () {
         var ok: Bool = ret.Some_Type?
         var tp: Bool = ret.Some_Type!.Type_Unit?
         call _assert _(ok.sub && tp.sub)
-        call _fclose inp
+        call _fclose finp
     }
     -- TYPE_NATIVE
     {
-        set inp = _(stropen("r", 0, "_char"))
+        set finp = _(stropen("r", 0, "_char"))
         set lin = 1;
         set col = 1;
         call lexer ()
@@ -1353,7 +1361,7 @@ func t_parser_type: () -> () {
         var id: _(char*) = ret.Some_Type!.Type_Nat!.2.2.Str!
         call _assert _(ok.sub && tp.sub)
         call _assert _(!strcmp(id,"char"))
-        call _fclose inp
+        call _fclose finp
     }
     -- TYPE_TUPLE
     {
@@ -1751,6 +1759,11 @@ func t_code: () -> () {
         native _{ char out[256]; }
         var s: _String = _out
         call open_out (s,256)
+        var enu: Int = _TK_UNIT
+        var e: Expr = Expr_Unit (enu,Str _({}),0,0)
+        call code_expr (\e)
+        call close ()
+        call _assert _{!strcmp(out,"")}
     }
 }
 
