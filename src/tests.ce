@@ -488,6 +488,7 @@ func open: (_FILE_PTR,_FILE_PTR) -> () {
 }
 
 func open_out: (_String,Int) -> () {
+    native _{ arg._1[0] = '\0'; }
     var fout: _FILE_PTR = _(stropen("w", arg._2, arg._1))
     var finp: _FILE_PTR = _NULL
     return open (fout, finp)
@@ -1137,6 +1138,7 @@ func env_id_to_type: (\List_Env,_String) -> Maybe_Type {
         var s: _String = cur\.Item_Env!.1.1
         if asbool _(!strcmp(s,arg._2)) {
             return Some_Type clone (\cur\.Item_Env!.1.2)
+            --return Some_Type Type_Any False
         }
         set cur = \cur\.Item_Env!.2
     }
@@ -1152,7 +1154,8 @@ func env_expr_to_type: (\List_Env,\Expr) -> Type {
 
     if e\.Expr_Var? {
         var id: _String = e\.Expr_Var!.2.Str!
-        return (env_id_to_type (arg.1,id)).Some_Type!
+        var tp: Maybe_Type = env_id_to_type (arg.1,id)
+        return tp.Some_Type!
     }
     call _assert 0
 }
