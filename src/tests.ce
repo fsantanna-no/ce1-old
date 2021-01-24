@@ -460,6 +460,10 @@ func accept_err: _TK -> Bool {
     return ret
 }
 
+func check: _TK -> Bool {
+    return asbool _(tk1._1 == arg)
+}
+
 func open: _(char*) -> () {
     set inp = _(stropen("r", 0, arg))
     set lin = 1;
@@ -803,6 +807,7 @@ type Maybe_Sub {
 type rec Stmt {
     Stmt_Var:  ((Int,TK_Val,Int,Int), Type, Expr)
     Stmt_User: (Bool, (Int,TK_Val,Int,Int), List_Sub)
+    Stmt_Call: Expr
 }
 
 type Maybe_Stmt {
@@ -895,6 +900,16 @@ func parser_stmt: () -> Maybe_Stmt {
         }
 
         return Some_Stmt Stmt_User (isrec,tk_id,subs)
+    }
+
+    if check _TK_CALL {
+        var e: Maybe_Expr = parser_expr True
+        if e.None_Expr? {
+            return None_Stmt
+        }
+        var iscall: Bool = e.Some_Expr!.Expr_Call?
+        call _assert _(iscall.sub)
+        return Some_Stmt Stmt_Call e.Some_Expr!
     }
 
     call _assert 0
@@ -1411,6 +1426,27 @@ func t_parser_stmt: () -> () {
         var str: _(char*) = user.2.2.Str!
         var tru: _(char*) = user.3.Item_Sub!.2.Item_Sub!.1.1.2.Str!
         call _assert _{!user._1.sub && !strcmp(str,"Bool") && !strcmp(tru,"True")}
+        call close ()
+    }
+    -- STMT_CALL
+    {
+        call open _{"call f()"}
+        var s: Maybe_Stmt = call parser_stmt ()
+        var cal: Expr = s.Some_Stmt!.Stmt_Call!
+        var ok: Bool = cal.Expr_Call?
+        var ok1: Bool = cal.Expr_Call!.1.Expr_Var?
+        var ok2: Bool = cal.Expr_Call!.2.Expr_Unit?
+        call _assert _{ok.sub && ok1.sub && ok2.sub}
+        call close ()
+    }
+    {
+        call open _{"call _printf ()"}
+        var s: Maybe_Stmt = call parser_stmt ()
+        var cal: Expr = s.Some_Stmt!.Stmt_Call!
+        var ok: Bool = cal.Expr_Call?
+        var ok1: Bool = cal.Expr_Call!.1.Expr_Nat?
+        var ok2: Bool = cal.Expr_Call!.2.Expr_Unit?
+        call _assert _{ok.sub && ok1.sub && ok2.sub}
         call close ()
     }
 }
