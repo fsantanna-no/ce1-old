@@ -1131,7 +1131,7 @@ type rec List_Env {
 
 func env_id_to_type: (\List_Env,_String) -> Maybe_Type {
     var cur: \List_Env = arg.1
-    loop {
+    loop {                                      -- CE2: find
         if cur\.$List_Env? {
             break
         }
@@ -1171,6 +1171,34 @@ func out: _String -> () {
     native _{ fputs(arg, fout); }
 }
 
+func to_ce_: (_String, \Type) -> () {
+}
+
+func to_c_: (_String,(\List_Env,\Type)) -> () {
+    var tp: \Type = arg.2.2
+    if tp\.Type_Tuple? {
+        native _{ strcat(arg._1, "TUPLE"); }
+        var cur: \List_Type = \tp\.Type_Tuple!.2
+        loop {                                      -- CE2: foreach
+            if cur\.$List_Type? {
+                break
+            }
+            native _{ strcat(arg._1, "__"); }
+            call to_ce_ (arg.1, \cur\.Item_Type!.1)
+            set cur = \cur\.Item_Type!.2
+        }
+    }
+}
+
+func to_c: (\List_Env,\Type) -> _String {
+    native _{
+        static char out[256];
+        out[0] = '\0';
+    }
+    call to_c_ (asstring _out, arg)
+    return _out
+}
+
 func code_expr: (\List_Env,\Expr) -> () {
     var tp: Type = call env_expr_to_type arg
     if and (tp.Type_Unit?, not arg.2\.Expr_Call?) {
@@ -1187,6 +1215,13 @@ func code_expr: (\List_Env,\Expr) -> () {
     }
     if e\.Expr_Nat? {
         call out e\.Expr_Nat!.2.Str!
+        return ()
+    }
+    if e\.Expr_Tuple? {
+        call out _{"(("}
+        call out to_c (arg.1, \tp)
+        call out _{") { /*}*/"}
+        call out _{"/*{*/ })"}
         return ()
     }
     call _assert 0
@@ -1859,6 +1894,20 @@ func t_code: () -> () {
         call code_expr (\env,\e)
         call close ()
         call _assert _{!strcmp(out,"xxx")}
+    }
+    -- EXPR_TUPLE
+    {
+        native _{ char out[256]; }
+        var s: _String = _out
+        call open_out (s,256)
+        var env: List_Env = Item_Env ((asstring _("xxx"),Type_Any False),$List_Env)
+        var e: Expr = Expr_Tuple
+                        Item_Expr (Expr_Unit (asint _TK_UNIT,Str _("()"),0,0),
+                        Item_Expr (Expr_Unit (asint _TK_UNIT,Str _("()"),0,0),
+                        $List_Expr))
+        call code_expr (\env,\e)
+        call close ()
+        call _assert _{!strcmp(out,"((TUPLE__Unit__Unit) {  })")}
     }
 }
 
