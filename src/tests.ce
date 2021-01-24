@@ -725,8 +725,24 @@ func parser_expr: Bool -> Maybe_Expr {
                 var tmp: Expr = Expr_Index (ret.Some_Expr!,tk0)
                 set ret = Some_Expr tmp
             } else {
-                call err_expected _("index or subtype")
-                return None_Expr
+                if or (accept _TX_USER, accept _TX_EMPTY) {
+                    var tk: (Int,TK_Val,Int,Int) = tk0
+                    if accept _('?') {
+                        var tmp: Expr = Expr_Pred (ret.Some_Expr!,tk)
+                        set ret = Some_Expr tmp
+                    } else {
+                        if accept _('!') {
+                            var tmp: Expr = Expr_Disc (ret.Some_Expr!,tk)
+                            set ret = Some_Expr tmp
+                        } else {
+                            call err_expected _("`?´ or `!´")
+                            return None_Expr
+                        }
+                    }
+                } else {
+                    call err_expected _("index or subtype")
+                    return None_Expr
+                }
             }
         } else {
             if accept _('\\') {
@@ -1243,7 +1259,25 @@ func t_parser_expr: () -> () {
         call close ()
     }
     -- EXPR_DISC
+    {
+        call open _{"x.Item!"}
+        var e: Maybe_Expr = call parser_expr True
+        var disc: (Expr,(Int,TK_Val,Int,Int)) = e.Some_Expr!.Expr_Disc!
+        var ok1: Bool = disc.1.Expr_Var?
+        var str: _(char*) = disc.2.2.Str!
+        call _assert _{ok1.sub && !strcmp(str,"Item")}
+        call close ()
+    }
     -- EXPR_PRED
+    {
+        call open _{"x.Item?"}
+        var e: Maybe_Expr = call parser_expr True
+        var disc: (Expr,(Int,TK_Val,Int,Int)) = e.Some_Expr!.Expr_Pred!
+        var ok1: Bool = disc.1.Expr_Var?
+        var str: _(char*) = disc.2.2.Str!
+        call _assert _{ok1.sub && !strcmp(str,"Item")}
+        call close ()
+    }
 }
 
 call t_lexer  ()
