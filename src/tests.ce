@@ -805,10 +805,13 @@ type Maybe_Sub {
 }
 
 type rec Stmt {
-    Stmt_Var:  ((Int,TK_Val,Int,Int), Type, Expr)
-    Stmt_User: (Bool, (Int,TK_Val,Int,Int), List_Sub)
-    Stmt_Call: Expr
-    Stmt_Seq:  (Stmt,Stmt)
+    Stmt_Pass:  ()
+    Stmt_Var:   ((Int,TK_Val,Int,Int), Type, Expr)
+    Stmt_User:  (Bool, (Int,TK_Val,Int,Int), List_Sub)
+    Stmt_Call:  Expr
+    Stmt_Seq:   (Stmt,Stmt)
+    Stmt_Block: Stmt
+    Stmt_If:    (Expr,Stmt,Stmt)
 }
 
 type Maybe_Stmt {
@@ -816,8 +819,24 @@ type Maybe_Stmt {
     Some_Stmt: Stmt
 }
 
+func pre parser_stmts: _TK -> Maybe_Stmt
+
 func parser_stmt: () -> Maybe_Stmt {
     --var tk_pre: (Int,TK_Val,Int,Int) = tk0
+
+    func parser_block: () -> Maybe_Stmt {
+        if not accept_err _('{') {
+            return None_Stmt
+        }
+        var ret: Maybe_Stmt = call parser_stmts _('}')
+        if ret.None_Stmt? {
+            return None_Stmt
+        }
+        if not accept_err _('}') {
+            return None_Stmt
+        }
+        return Some_Stmt Stmt_Block ret.Some_Stmt!
+    }
 
     -- STMT_VAR
     if accept _TK_VAR {
@@ -913,6 +932,34 @@ func parser_stmt: () -> Maybe_Stmt {
         return Some_Stmt Stmt_Call e.Some_Expr!
     }
 
+    -- STMT_IF
+    if accept _TK_IF {
+        var tst: Maybe_Expr = call parser_expr False
+        if tst.None_Expr? {
+            return None_Stmt
+        }
+
+        var t: Maybe_Stmt = call parser_stmt ()
+        if t.None_Stmt? {
+            return None_Stmt
+        }
+
+        if accept _TK_ELSE {
+            var f: Maybe_Stmt = call parser_stmt ()
+            if f.None_Stmt? {
+                return None_Stmt
+            }
+            return Some_Stmt Stmt_If (tst.Some_Expr!,t.Some_Stmt!,f.Some_Stmt!)
+        } else {
+            return Some_Stmt Stmt_If (tst.Some_Expr!,t.Some_Stmt!,Stmt_Pass)
+        }
+    }
+
+    -- STMT_BLOCK
+    if check _('{') {
+        return parser_block ()
+    }
+
     call err_expected _("statement")
     return None_Stmt
 }
@@ -924,11 +971,17 @@ func enseq: (Maybe_Stmt,Maybe_Stmt) -> Maybe_Stmt {
     if arg.2.None_Stmt? {
         return arg.1
     }
+    if arg.1.Some_Stmt!.Stmt_Pass? {
+        return arg.2
+    }
+    if arg.2.Some_Stmt!.Stmt_Pass? {
+        return arg.1
+    }
     return Some_Stmt Stmt_Seq (arg.1.Some_Stmt!,arg.2.Some_Stmt!)
 }
 
 func parser_stmts: _TK -> Maybe_Stmt {
-    var ret: Maybe_Stmt = None_Stmt
+    var ret: Maybe_Stmt = Some_Stmt Stmt_Pass
     loop {
         call accept _(';')
         var tk_bef: (Int,TK_Val,Int,Int) = tk0
@@ -1508,6 +1561,26 @@ func t_parser_stmt: () -> () {
             var ok2: Bool = cal.Expr_Call!.2.Expr_Unit?
             call _assert _{ok.sub && ok1.sub && ok2.sub}
         }
+        call close ()
+    }
+    -- STMT_BLOCK
+    {
+        call open _{"{ call f() }"}
+        var s: Maybe_Stmt = call parser_stmt ()
+        var blk: Stmt = s.Some_Stmt!.Stmt_Block!
+        var ok: Bool = blk.Stmt_Call?
+        call _assert _{ok.sub}
+        call close ()
+    }
+    -- STMT_IF
+    {
+        call open _{"if () {} else { call f() }"}
+        var s: Maybe_Stmt = call parser_stmt ()
+        var if_: (Expr,Stmt,Stmt) = s.Some_Stmt!.Stmt_If!
+        var ok: Bool = if_.1.Expr_Unit?
+        var ok1: Bool = if_.2.Stmt_Block!.Stmt_Pass?
+        var ok2: Bool = if_.3.Stmt_Block!.Stmt_Call?
+        call _assert _{ok.sub && ok1.sub && ok2.sub}
         call close ()
     }
 }
