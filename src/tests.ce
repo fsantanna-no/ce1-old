@@ -618,6 +618,11 @@ func parser_expr_: () -> Maybe_Expr {
         return Some_Expr Expr_Empty tk0
     }
 
+    -- EXPR_INT
+    if accept _TX_NUM {
+        return Some_Expr Expr_Int tk0
+    }
+
     -- EXPR_VAR
     if accept _TX_VAR {
         return Some_Expr Expr_Var tk0
@@ -1230,6 +1235,13 @@ func t_parser_expr: () -> () {
         call close ()
     }
     -- EXPR_INT
+    {
+        call open _{"10"}
+        var e: Maybe_Expr = call parser_expr True
+        var n: Int = e.Some_Expr!.Expr_Int!.2.Num!
+        call _assert _{n == 10}
+        call close ()
+    }
     -- EXPR_DISC
     -- EXPR_PRED
 }
