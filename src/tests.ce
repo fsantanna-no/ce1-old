@@ -791,8 +791,18 @@ func parser_expr: Bool -> Maybe_Expr {
 
 -------------------------------------------------------------------------------
 
+type rec List_Sub {
+    Item_Sub: (((Int,TK_Val,Int,Int),Type), List_Sub)
+}
+
+type Maybe_Sub {
+    None_Sub: ()
+    Some_Sub: ((Int,TK_Val,Int,Int), Type)
+}
+
 type rec Stmt {
-    Stmt_Var: ((Int,TK_Val,Int,Int), Type, Expr)
+    Stmt_Var:  ((Int,TK_Val,Int,Int), Type, Expr)
+    Stmt_User: (Bool, (Int,TK_Val,Int,Int), List_Sub)
 }
 
 type Maybe_Stmt {
@@ -803,6 +813,7 @@ type Maybe_Stmt {
 func parser_stmt: () -> Maybe_Stmt {
     --var tk_pre: (Int,TK_Val,Int,Int) = tk0
 
+    -- STMT_VAR
     if accept _TK_VAR {
         if not accept_err _TX_VAR {
             return None_Stmt
@@ -823,6 +834,67 @@ func parser_stmt: () -> Maybe_Stmt {
             return None_Stmt
         }
         return Some_Stmt Stmt_Var (tk_id,tp.Some_Type!,e.Some_Expr!)
+    }
+
+    -- STMT_USER
+    if accept _TK_TYPE {
+        if not accept _TX_USER {
+            return None_Stmt
+        }
+
+        var ispre: Bool = accept _TK_PRE
+        var isrec: Bool = accept _TK_REC
+        var tk_id: (Int,TK_Val,Int,Int) = tk0
+
+        if ispre {
+            return Some_Stmt Stmt_User (isrec,tk_id,$List_Sub)
+        }
+
+        if not accept_err _('{') {
+            return None_Stmt
+        }
+
+        -- SUBS
+
+        func parser_sub: () -> Maybe_Sub {
+            if not accept_err _TX_USER {
+                return None_Sub
+            }
+            var tk: (Int,TK_Val,Int,Int) = tk0
+            if not accept_err _(':') {
+                return None_Sub
+            }
+            var tp: Maybe_Type = call parser_type ()
+            if tp.None_Type? {
+                return None_Sub
+            }
+            return Some_Sub (tk,tp.Some_Type!)
+        }
+
+        var sub: Maybe_Sub = call parser_sub ()
+        if sub.None_Sub? {
+            return None_Stmt
+        }
+
+        var subs: List_Sub = Item_Sub (sub.Some_Sub!,$List_Sub)
+        {
+            var cur: \List_Sub = \subs.Item_Sub!.2
+            loop {
+                call accept _(';')
+                var nxt: Maybe_Sub = call parser_sub ()
+                if nxt.None_Sub? {
+                    break
+                }
+                set cur\ = Item_Sub (nxt.Some_Sub!,$List_Sub)
+                set cur = \cur\.Item_Sub!.2
+            }
+        }
+
+        if not accept_err _('}') {
+            return None_Stmt
+        }
+
+        return Some_Stmt Stmt_User (isrec,tk_id,subs)
     }
 
     call _assert 0
@@ -1329,6 +1401,16 @@ func t_parser_stmt: () -> () {
         var ok2: Bool = s.Some_Stmt!.Stmt_Var!.2.Type_Unit?
         var ok3: Bool = s.Some_Stmt!.Stmt_Var!.3.Expr_Unit?
         call _assert _{ok.sub && ok2.sub && ok3.sub && !strcmp(str1,"x")}
+        call close ()
+    }
+    -- STMT_USER
+    {
+        call open _{"type Bool { False:() ; True:() }"}
+        var s: Maybe_Stmt = call parser_stmt ()
+        var user: (Bool, (Int,TK_Val,Int,Int), List_Sub) = s.Some_Stmt!.Stmt_User!
+        var str: _(char*) = user.2.2.Str!
+        var tru: _(char*) = user.3.Item_Sub!.2.Item_Sub!.1.1.2.Str!
+        call _assert _{!user._1.sub && !strcmp(str,"Bool") && !strcmp(tru,"True")}
         call close ()
     }
 }
