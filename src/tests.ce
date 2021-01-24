@@ -809,6 +809,7 @@ type pre Maybe_Stmt
 type rec Stmt {
     Stmt_Pass:  ()
     Stmt_Var:   ((Int,TK_Val,Int,Int), Type, Expr)
+    Stmt_Set:   (Expr,Expr)
     Stmt_User:  (Bool, (Int,TK_Val,Int,Int), List_Sub)
     Stmt_Call:  Expr
     Stmt_Seq:   (Stmt,Stmt)
@@ -866,6 +867,22 @@ func parser_stmt: () -> Maybe_Stmt {
             return None_Stmt
         }
         return Some_Stmt Stmt_Var (tk_id,tp.Some_Type!,e.Some_Expr!)
+    }
+
+    -- STMT_SET
+    if accept _TK_SET {
+        var dst: Maybe_Expr = call parser_expr False
+        if dst.None_Expr? {
+            return None_Stmt
+        }
+        if not accept_err _('=') {
+            return None_Stmt
+        }
+        var src: Maybe_Expr = call parser_expr True
+        if src.None_Expr? {
+            return None_Stmt
+        }
+        return Some_Stmt Stmt_Set (dst.Some_Expr!,src.Some_Expr!)
     }
 
     -- STMT_USER
@@ -1684,6 +1701,16 @@ func t_parser_stmt: () -> () {
         var lop: Stmt = s.Some_Stmt!.Stmt_Loop!
         var ok: Bool = lop.Stmt_Block!.Stmt_Break?
         call _assert _{ok.sub}
+        call close ()
+    }
+    -- STMT_SET
+    {
+        call open _{"set s = ()"}
+        var s: Maybe_Stmt = call parser_stmt ()
+        var ss: (Expr,Expr) = s.Some_Stmt!.Stmt_Set!
+        var ok1: Bool = ss.1.Expr_Var?
+        var ok2: Bool = ss.2.Expr_Unit?
+        call _assert _{ok1.sub && ok2.sub}
         call close ()
     }
 }
