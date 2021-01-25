@@ -531,8 +531,8 @@ type Maybe_Type {                           -- CE2: generic
     Some_Type: Type
 }
 
-func type_is_ptr: \Type -> Bool {
-    return asbool _(*((int*)arg))
+func type_is_ptr: \Type -> Bool {           -- CE2: subtype
+    return asbool _(*(*((char**)arg)+sizeof(TYPE)))
 }
 
 func parser_type: () -> Maybe_Type {
@@ -1167,16 +1167,23 @@ func env_expr_to_type: (\List_Env,\Expr) -> Type {
     }
 
     if e\.Expr_Tuple? {
-        var cur: \List_Expr = \e\.Expr_Tuple!
-        loop {                                      -- CE2: map
-            if cur\.$List_Expr? {
-                break
+        var l: List_Type = $List_Type
+        {
+            var ret: \List_Type = \l
+            var cur: \List_Expr = \e\.Expr_Tuple!
+            loop {                                      -- CE2: map
+                if cur\.$List_Expr? {
+                    break
+                }
+
+                var tp: Type = env_expr_to_type (arg.1, \cur\.Item_Expr!.1)
+                set ret\ = Item_Type (tp, $List_Type)
+                set ret = \ret\.Item_Type!.2
+
+                set cur = \cur\.Item_Expr!.2
             }
-
-            --TODO
-
-            set cur = \cur\.Item_Expr!.2
         }
+        return Type_Tuple (False, l)
     }
 
     call _assert 0
@@ -1258,8 +1265,10 @@ func code_expr: (\List_Env,\Expr) -> () {
     if e\.Expr_Tuple? {
         call out _{"(("}
         call out to_c (arg.1, \tp)
-        call out _{") { /*}*/"}
-        call out _{"/*{*/ })"}
+        call out _{") "}
+        call out _("{ ")
+        call out _(" }")
+        call out _{")"}
         return ()
     }
     call _assert 0
@@ -1611,7 +1620,6 @@ func t_parser_expr: () -> () {
     {
         call open_inp _{"call xxx ()"}
         var e: Maybe_Expr = call parser_expr True
---output std (\e)
         var cal: (Expr,Expr) = e.Some_Expr!.Expr_Call!
         var ok1: Bool = cal.1.Expr_Var?
         var ok2: Bool = cal.2.Expr_Unit?
