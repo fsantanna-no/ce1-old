@@ -1186,6 +1186,16 @@ func env_expr_to_type: (\List_Env,\Expr) -> Type {
         return Type_Tuple (False, l)
     }
 
+    if e\.Expr_Index? {
+        var num: Int = e\.Expr_Index!.2.2.Num!
+        var tp: Type = call env_expr_to_type (arg.1, \e\.Expr_Index!.1)
+        if tp.Type_Nat? {
+            return tp
+        }
+        call _assert 0
+        --return clone tp\.Tuple_Type![num]
+    }
+
     call _assert 0
 }
 
@@ -1269,6 +1279,12 @@ func code_expr: (\List_Env,\Expr) -> () {
         call out _("{ ")
         call out _(" }")
         call out _{")"}
+        return ()
+    }
+    if e\.Expr_Index? {
+        var num: Int = e\.Expr_Index!.2.2.Num!
+        call code_expr (arg.1, \e\.Expr_Index!.1)
+        native _{ fprintf(fout, "._%d", num); }
         return ()
     }
     call _assert 0
@@ -1954,6 +1970,20 @@ func t_code: () -> () {
         call code_expr (\env,\e)
         call close ()
         call _assert _{!strcmp(out,"((TUPLE__Unit__Unit) {  })")}
+    }
+    -- EXPR_INDEX
+    {
+        native _{ char out[256]; }
+        var s: _String = _out
+        call open_out (s,256)
+        var env: List_Env = Item_Env ((asstring _("x"),Type_Nat (False,(asint _TX_NAT,Str _("char"),0,0))),$List_Env)
+        var e: Expr = Expr_Index (
+                        Expr_Var (asint _TX_VAR,Str _("x"),0,0),
+                        (asint _TX_NUM,Num 2,0,0)
+                      )
+        call code_expr (\env,\e)
+        call close ()
+        call _assert _{!strcmp(out,"x._2")}
     }
 }
 
