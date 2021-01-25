@@ -1208,6 +1208,8 @@ func env_expr_to_type: (\List_Env,\Expr) -> Type {
 
 -------------------------------------------------------------------------------
 
+-------------------------------------------------------------------------------
+
 func out: _String -> () {
     native _{ fputs(arg, fout); }
 }
@@ -1301,6 +1303,19 @@ func code_stmt: \Stmt -> () {
     if arg\.Stmt_Pass? {
         return ()
     }
+    if arg\.Stmt_Seq? {
+        call code_stmt (\arg\.Stmt_Seq!.1)
+        call code_stmt (\arg\.Stmt_Seq!.2)
+        return ()
+    }
+    if arg\.Stmt_Var? {
+        return ()
+    }
+    if arg\.Stmt_Call? {
+        --call code_expr (?, ?)
+        call out _(";\n")
+        return ()
+    }
     call _assert 0
 }
 
@@ -1315,10 +1330,9 @@ func code: \Stmt -> () {
         "#define stdout_Int_(x) printf(\"%d\",x)\n"
         "#define stdout_Int(x)  (stdout_Int_(x), puts(\"\"))\n"
         "int main (void) {\n"
-        "\n"
     );
     call code_stmt arg
-    call out _("\n}\n");
+    call out _("}\n");
 }
 
 -------------------------------------------------------------------------------
@@ -2033,6 +2047,51 @@ func t_code: () -> () {
         call open_out (str,1024)
         var s: Stmt = Stmt_Pass
         call code (\s)
+        call close ()
+        var xp: _String = _{
+            "#include <assert.h>\n"
+            "#include <stdio.h>\n"
+            "#include <stdlib.h>\n"
+            "typedef int Int;\n"
+            "#define stdout_Unit_() printf(\"()\")\n"
+            "#define stdout_Unit()  (stdout_Unit_(), puts(\"\"))\n"
+            "#define stdout_Int_(x) printf(\"%d\",x)\n"
+            "#define stdout_Int(x)  (stdout_Int_(x), puts(\"\"))\n"
+            "int main (void) {\n"
+            "}\n";
+        }
+        call _assert _{!strcmp(out,xp)}
+    }
+call _assert 0  -- DAQUI PRA BAIXO NAO FUNCIONA
+    {
+        native _{ char out[1024]; }
+        var str: _String = _out
+        call open (str,1024, asstring _("call _stdo a"))
+        var s: Maybe_Stmt = parser_stmt ()
+        call code (\s.Some_Stmt!)
+        call close ()
+call _assert 0
+        var xp: _String = _{
+            "#include <assert.h>\n"
+            "#include <stdio.h>\n"
+            "#include <stdlib.h>\n"
+            "typedef int Int;\n"
+            "#define stdout_Unit_() printf(\"()\")\n"
+            "#define stdout_Unit()  (stdout_Unit_(), puts(\"\"))\n"
+            "#define stdout_Int_(x) printf(\"%d\",x)\n"
+            "#define stdout_Int(x)  (stdout_Int_(x), puts(\"\"))\n"
+            "int main (void) {\n"
+            "stdo();\n"
+            "}\n";
+        }
+        call _assert _{!strcmp(out,xp)}
+    }
+    {
+        native _{ char out[1024]; }
+        var str: _String = _out
+        call open (str,1024, asstring _("var a : () = () ; call _stdo a"))
+        var s: Maybe_Stmt = parser_stmt ()
+        call code (\s.Some_Stmt!)
         call close ()
         var xp: _String = _{
             "#include <assert.h>\n"
