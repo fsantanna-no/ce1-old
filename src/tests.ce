@@ -1290,6 +1290,22 @@ func code_expr: (\List_Env,\Expr) -> () {
     call _assert 0
 }
 
+func code: \Stmt -> () {
+    call out _(
+        "#include <assert.h>\n"
+        "#include <stdio.h>\n"
+        "#include <stdlib.h>\n"
+        "typedef int Int;\n"
+        "#define stdout_Unit_() printf(\"()\")\n"
+        "#define stdout_Unit()  (stdout_Unit_(), puts(\"\"))\n"
+        "#define stdout_Int_(x) printf(\"%d\",x)\n"
+        "#define stdout_Int(x)  (stdout_Int_(x), puts(\"\"))\n"
+        "int main (void) {\n"
+        "\n"
+    );
+    call out _("\n}\n");
+}
+
 -------------------------------------------------------------------------------
 
 func t_lexer: () -> () {
@@ -1927,8 +1943,8 @@ func t_code: () -> () {
     -- EXPR_UNIT
     {
         native _{ char out[256]; }
-        var s: _String = _out
-        call open_out (s,256)
+        var str: _String = _out
+        call open_out (str,256)
         var env: List_Env = $List_Env
         var e: Expr = Expr_Unit (asint _TK_UNIT,Str _("()"),0,0)
         call code_expr (\env,\e)
@@ -1938,8 +1954,8 @@ func t_code: () -> () {
     -- EXPR_VAR
     {
         native _{ char out[256]; }
-        var s: _String = _out
-        call open_out (s,256)
+        var str: _String = _out
+        call open_out (str,256)
         var env: List_Env = Item_Env ((asstring _("xxx"),Type_Any False),$List_Env)
         var e: Expr = Expr_Var (asint _TK_VAR,Str _("xxx"),0,0)
         call code_expr (\env,\e)
@@ -1949,8 +1965,8 @@ func t_code: () -> () {
     -- EXPR_NATIVE
     {
         native _{ char out[256]; }
-        var s: _String = _out
-        call open_out (s,256)
+        var str: _String = _out
+        call open_out (str,256)
         var env: List_Env = Item_Env ((asstring _("xxx"),Type_Any False),$List_Env)
         var e: Expr = Expr_Nat (asint _TK_NAT,Str _("xxx"),0,0)
         call code_expr (\env,\e)
@@ -1960,8 +1976,8 @@ func t_code: () -> () {
     -- EXPR_TUPLE
     {
         native _{ char out[256]; }
-        var s: _String = _out
-        call open_out (s,256)
+        var str: _String = _out
+        call open_out (str,256)
         var env: List_Env = Item_Env ((asstring _("xxx"),Type_Any False),$List_Env)
         var e: Expr = Expr_Tuple
                         Item_Expr (Expr_Unit (asint _TK_UNIT,Str _("()"),0,0),
@@ -1974,8 +1990,8 @@ func t_code: () -> () {
     -- EXPR_INDEX
     {
         native _{ char out[256]; }
-        var s: _String = _out
-        call open_out (s,256)
+        var str: _String = _out
+        call open_out (str,256)
         var env: List_Env = Item_Env ((asstring _("x"),Type_Nat (False,(asint _TX_NAT,Str _("char"),0,0))),$List_Env)
         var e: Expr = Expr_Index (
                         Expr_Var (asint _TX_VAR,Str _("x"),0,0),
@@ -1984,6 +2000,30 @@ func t_code: () -> () {
         call code_expr (\env,\e)
         call close ()
         call _assert _{!strcmp(out,"x._2")}
+    }
+    -- code ()
+    {
+        native _{ char out[1024]; }
+        var str: _String = _out
+        call open_out (str,1024)
+        var s: Stmt = Stmt_Pass
+        call code (\s)
+        call close ()
+        var xp: _String = _{
+            "#include <assert.h>\n"
+            "#include <stdio.h>\n"
+            "#include <stdlib.h>\n"
+            "typedef int Int;\n"
+            "#define stdout_Unit_() printf(\"()\")\n"
+            "#define stdout_Unit()  (stdout_Unit_(), puts(\"\"))\n"
+            "#define stdout_Int_(x) printf(\"%d\",x)\n"
+            "#define stdout_Int(x)  (stdout_Int_(x), puts(\"\"))\n"
+            "int main (void) {\n"
+            "\n"
+            "\n"
+            "}\n";
+        }
+        call _assert _{!strcmp(out,xp)}
     }
 }
 
