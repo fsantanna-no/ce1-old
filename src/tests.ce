@@ -477,7 +477,7 @@ func check: _TK -> Bool {
     return asbool _(tk1._1 == arg)
 }
 
-func open: (_FILE_PTR,_FILE_PTR) -> () {
+func open_fs: (_FILE_PTR,_FILE_PTR) -> () {
     set fout = arg.1
     set finp = arg.2
     set lin = 1;
@@ -491,13 +491,20 @@ func open_out: (_String,Int) -> () {
     native _{ arg._1[0] = '\0'; }
     var fout: _FILE_PTR = _(stropen("w", arg._2, arg._1))
     var finp: _FILE_PTR = _NULL
-    return open (fout, finp)
+    return open_fs (fout, finp)
 }
 
 func open_inp: _String -> () {
     var fout: _FILE_PTR = _NULL
     var finp: _FILE_PTR = _(stropen("r", 0, arg))
-    return open (fout, finp)
+    return open_fs (fout, finp)
+}
+
+func open: (_String,Int,_String) -> () {
+    native _{ arg._1[0] = '\0'; }
+    var fout: _FILE_PTR = _(stropen("w", arg._2, arg._1))
+    var finp: _FILE_PTR = _(stropen("r", 0, arg._3))
+    return open_fs (fout, finp)
 }
 
 func close: () -> () {
@@ -1290,6 +1297,13 @@ func code_expr: (\List_Env,\Expr) -> () {
     call _assert 0
 }
 
+func code_stmt: \Stmt -> () {
+    if arg\.Stmt_Pass? {
+        return ()
+    }
+    call _assert 0
+}
+
 func code: \Stmt -> () {
     call out _(
         "#include <assert.h>\n"
@@ -1303,6 +1317,7 @@ func code: \Stmt -> () {
         "int main (void) {\n"
         "\n"
     );
+    call code_stmt arg
     call out _("\n}\n");
 }
 
@@ -2000,6 +2015,16 @@ func t_code: () -> () {
         call code_expr (\env,\e)
         call close ()
         call _assert _{!strcmp(out,"x._2")}
+    }
+    -- STMT_PASS
+    {
+        native _{ char out[256]; }
+        var str: _String = _out
+        call open_out (str,256)
+        var s: Stmt = Stmt_Pass
+        call code_stmt (\s)
+        call close ()
+        call _assert _{!strcmp(out,"")}
     }
     -- code ()
     {
