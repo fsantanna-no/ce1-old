@@ -567,14 +567,14 @@ func parser_type: () -> Maybe_Type {
 
             -- TYPE_PARENS
             if accept _{')'} {
-                return tmp
+                return move tmp
             }
             if not accept_err _(',') {
                 return None_Type
             }
 
             -- TYPE_TUPLE   // CE2: generic w/ EXPR_TUPLE
-            var lst: List_Type = Item_Type (tmp.Some_Type!, $List_Type)
+            var lst: List_Type = Item_Type (move tmp.Some_Type!, $List_Type)
             {
                 var cur: \List_Type = \lst.Item_Type!.2
                 loop {
@@ -582,7 +582,7 @@ func parser_type: () -> Maybe_Type {
                     if tmp.None_Type? {
                         return None_Type
                     }
-                    set cur\ = Item_Type (tmp.Some_Type!, $List_Type)
+                    set cur\ = Item_Type (move tmp.Some_Type!, $List_Type)
                     set cur = \cur\.Item_Type!.2
                     if not accept_err _(',') {
                         break
@@ -594,7 +594,7 @@ func parser_type: () -> Maybe_Type {
                 return None_Type
             }
 
-            return Some_Type Type_Tuple (isalias,lst)
+            return Some_Type Type_Tuple (isalias, move lst)
         }
 
         call err_expected _("type")
@@ -603,7 +603,7 @@ func parser_type: () -> Maybe_Type {
 
     var ret: Maybe_Type = call one ()
     if ret.None_Type? {
-        return ret
+        return move ret
     } else {
         -- TYPE_FUNC
         if accept _TK_ARROW {
@@ -611,10 +611,10 @@ func parser_type: () -> Maybe_Type {
             if out.None_Type? {
                 return None_Type
             } else {
-                return Some_Type Type_Func (False,ret.Some_Type!,out.Some_Type!)
+                return Some_Type Type_Func (False,move ret.Some_Type!,move out.Some_Type!)
             }
         } else {
-            return ret
+            return move ret
         }
     }
 }
@@ -694,7 +694,7 @@ func parser_expr_: () -> Maybe_Expr {
                        or (e.Some_Expr!.Expr_Index?, False)))
                        --or (e.Some_Expr!.Expr_Disc?, False)))))))
         if ok {
-            return Some_Expr Expr_Upref e.Some_Expr!
+            return Some_Expr Expr_Upref move e.Some_Expr!
         } else {
             var str: _String = _("unexpected operand to `\\´")
             call err_tk (tk0,str)
@@ -711,14 +711,14 @@ func parser_expr_: () -> Maybe_Expr {
 
         -- EXPR_PARENS
         if accept _{')'} {
-            return e
+            return move e
         }
         if not accept_err _(',') {
             return None_Expr
         }
 
         -- EXPR_TUPLE
-        var lst: List_Expr = Item_Expr (e.Some_Expr!, $List_Expr)
+        var lst: List_Expr = Item_Expr (move e.Some_Expr!, $List_Expr)
         {
             var cur: \List_Expr = \lst.Item_Expr!.2
             loop {
@@ -726,7 +726,7 @@ func parser_expr_: () -> Maybe_Expr {
                 if tmp.None_Expr? {
                     return None_Expr
                 }
-                set cur\ = Item_Expr (tmp.Some_Expr!, $List_Expr)
+                set cur\ = Item_Expr (move tmp.Some_Expr!, $List_Expr)
                 set cur = \cur\.Item_Expr!.2
                 if not accept_err _(',') {
                     break
@@ -737,7 +737,7 @@ func parser_expr_: () -> Maybe_Expr {
         if not accept_err _{')'} {
             return None_Expr
         }
-        return Some_Expr Expr_Tuple lst
+        return Some_Expr Expr_Tuple move lst
     }
 
     -- EXPR_CONS
@@ -749,7 +749,7 @@ func parser_expr_: () -> Maybe_Expr {
             set tk.1 = _TK_UNIT
             set e = Some_Expr Expr_Unit tk
         }
-        return Some_Expr Expr_Cons (sub,e.Some_Expr!)
+        return Some_Expr Expr_Cons (sub, move e.Some_Expr!)
     }
 
     call err_expected _("expression")
@@ -771,18 +771,18 @@ func parser_expr: Bool -> Maybe_Expr {
         if accept _('.') {
             -- EXPR_INDEX
             if accept _TX_NUM {
-                var tmp: Expr = Expr_Index (ret.Some_Expr!,tk0)
-                set ret = Some_Expr tmp
+                var tmp: Expr = Expr_Index (move ret.Some_Expr!,tk0)
+                set ret = Some_Expr move tmp
             } else {
                 if or (accept _TX_USER, accept _TX_EMPTY) {
                     var tk: (Int,TK_Val,Int,Int) = tk0
                     if accept _('?') {
-                        var tmp: Expr = Expr_Pred (ret.Some_Expr!,tk)
-                        set ret = Some_Expr tmp
+                        var tmp: Expr = Expr_Pred (move ret.Some_Expr!,tk)
+                        set ret = Some_Expr move tmp
                     } else {
                         if accept _('!') {
-                            var tmp: Expr = Expr_Disc (ret.Some_Expr!,tk)
-                            set ret = Some_Expr tmp
+                            var tmp: Expr = Expr_Disc (move ret.Some_Expr!,tk)
+                            set ret = Some_Expr move tmp
                         } else {
                             call err_expected _("`?´ or `!´")
                             return None_Expr
@@ -804,8 +804,8 @@ func parser_expr: Bool -> Maybe_Expr {
                                or (ret.Some_Expr!.Expr_Call?, False))))))
                                --or (ret.Some_Expr!.Expr_Disc?, False)))))))
                 if ok {
-                    var tmp: Expr = Expr_Dnref ret.Some_Expr!
-                    set ret = Some_Expr tmp
+                    var tmp: Expr = Expr_Dnref move ret.Some_Expr!
+                    set ret = Some_Expr move tmp
                 } else {
                     var str: _String = _("unexpected operand to `\\´")
                     call err_tk (tk0,str)
@@ -818,8 +818,8 @@ func parser_expr: Bool -> Maybe_Expr {
                     var tk_bef: (Int,TK_Val,Int,Int) = tk0
                     var e: Maybe_Expr = parser_expr False
                     if e.Some_Expr? {
-                        var tmp: Expr = Expr_Call (ret.Some_Expr!, e.Some_Expr!)
-                        set ret = Some_Expr tmp
+                        var tmp: Expr = Expr_Call (move ret.Some_Expr!, move e.Some_Expr!)
+                        set ret = Some_Expr move tmp
                         set ok = True
                     }
                 }
@@ -835,7 +835,7 @@ func parser_expr: Bool -> Maybe_Expr {
         }
     }
 
-    return ret
+    return move ret
 }
 
 -------------------------------------------------------------------------------
@@ -888,7 +888,7 @@ func parser_stmt: () -> Maybe_Stmt {
         if not accept_err _('}') {
             return None_Stmt
         }
-        return Some_Stmt Stmt_Block ret.Some_Stmt!
+        return Some_Stmt Stmt_Block move ret.Some_Stmt!
     }
 
     -- STMT_VAR
@@ -911,7 +911,7 @@ func parser_stmt: () -> Maybe_Stmt {
         if e.None_Expr? {
             return None_Stmt
         }
-        return Some_Stmt Stmt_Var (tk_id,tp.Some_Type!,e.Some_Expr!)
+        return Some_Stmt Stmt_Var (tk_id,move tp.Some_Type!,move e.Some_Expr!)
     }
 
     -- STMT_SET
@@ -927,7 +927,7 @@ func parser_stmt: () -> Maybe_Stmt {
         if src.None_Expr? {
             return None_Stmt
         }
-        return Some_Stmt Stmt_Set (dst.Some_Expr!,src.Some_Expr!)
+        return Some_Stmt Stmt_Set (move dst.Some_Expr!,move src.Some_Expr!)
     }
 
     -- STMT_USER
@@ -962,7 +962,7 @@ func parser_stmt: () -> Maybe_Stmt {
             if tp.None_Type? {
                 return None_Sub
             }
-            return Some_Sub (tk,tp.Some_Type!)
+            return Some_Sub (tk,move tp.Some_Type!)
         }
 
         var sub: Maybe_Sub = call parser_sub ()
@@ -970,7 +970,7 @@ func parser_stmt: () -> Maybe_Stmt {
             return None_Stmt
         }
 
-        var subs: List_Sub = Item_Sub (sub.Some_Sub!,$List_Sub)
+        var subs: List_Sub = Item_Sub (move sub.Some_Sub!,$List_Sub)
         {
             var cur: \List_Sub = \subs.Item_Sub!.2
             loop {
@@ -979,7 +979,7 @@ func parser_stmt: () -> Maybe_Stmt {
                 if nxt.None_Sub? {
                     break
                 }
-                set cur\ = Item_Sub (nxt.Some_Sub!,$List_Sub)
+                set cur\ = Item_Sub (move nxt.Some_Sub!,$List_Sub)
                 set cur = \cur\.Item_Sub!.2
             }
         }
@@ -988,7 +988,7 @@ func parser_stmt: () -> Maybe_Stmt {
             return None_Stmt
         }
 
-        return Some_Stmt Stmt_User (isrec,tk_id,subs)
+        return Some_Stmt Stmt_User (isrec,tk_id,move subs)
     }
 
     if check _TK_CALL {
@@ -998,7 +998,7 @@ func parser_stmt: () -> Maybe_Stmt {
         }
         var iscall: Bool = e.Some_Expr!.Expr_Call?
         call _assert _(iscall.sub)
-        return Some_Stmt Stmt_Call e.Some_Expr!
+        return Some_Stmt Stmt_Call move e.Some_Expr!
     }
 
     -- STMT_IF
@@ -1018,9 +1018,9 @@ func parser_stmt: () -> Maybe_Stmt {
             if f.None_Stmt? {
                 return None_Stmt
             }
-            return Some_Stmt Stmt_If (tst.Some_Expr!,t.Some_Stmt!,f.Some_Stmt!)
+            return Some_Stmt Stmt_If (move tst.Some_Expr!,move t.Some_Stmt!,move f.Some_Stmt!)
         } else {
-            return Some_Stmt Stmt_If (tst.Some_Expr!,t.Some_Stmt!,Stmt_Pass)
+            return Some_Stmt Stmt_If (move tst.Some_Expr!,move t.Some_Stmt!,Stmt_Pass)
         }
     }
 
@@ -1035,7 +1035,7 @@ func parser_stmt: () -> Maybe_Stmt {
         if blk.None_Stmt? {
             return None_Stmt
         }
-        return Some_Stmt Stmt_Loop blk.Some_Stmt!
+        return Some_Stmt Stmt_Loop move blk.Some_Stmt!
     }
 
     -- STMT_FUNC
@@ -1053,13 +1053,13 @@ func parser_stmt: () -> Maybe_Stmt {
             return None_Stmt
         }
         if ispre {
-            return Some_Stmt Stmt_Func (tk_id,tp.Some_Type!,None_Stmt)
+            return Some_Stmt Stmt_Func (tk_id,move tp.Some_Type!,None_Stmt)
         }
         var body: Maybe_Stmt = call parser_block ()
         if body.None_Stmt? {
             return None_Stmt
         }
-        return Some_Stmt Stmt_Func (tk_id,tp.Some_Type!,body)
+        return Some_Stmt Stmt_Func (tk_id,move tp.Some_Type!,move body)
     }
 
     -- STMT_RET
@@ -1068,7 +1068,7 @@ func parser_stmt: () -> Maybe_Stmt {
         if e.None_Expr? {
             return None_Stmt
         }
-        return Some_Stmt Stmt_Ret e.Some_Expr!
+        return Some_Stmt Stmt_Ret move e.Some_Expr!
     }
 
     -- STMT_BLOCK
@@ -1091,18 +1091,18 @@ func parser_stmt: () -> Maybe_Stmt {
 
 func enseq: (Maybe_Stmt,Maybe_Stmt) -> Maybe_Stmt {
     if arg.1.None_Stmt? {
-        return arg.2
+        return move arg.2
     }
     if arg.2.None_Stmt? {
-        return arg.1
+        return move arg.1
     }
     if arg.1.Some_Stmt!.Stmt_Pass? {
-        return arg.2
+        return move arg.2
     }
     if arg.2.Some_Stmt!.Stmt_Pass? {
-        return arg.1
+        return move arg.1
     }
-    return Some_Stmt Stmt_Seq (arg.1.Some_Stmt!,arg.2.Some_Stmt!)
+    return Some_Stmt Stmt_Seq (move arg.1.Some_Stmt!,move arg.2.Some_Stmt!)
 }
 
 func parser_stmts: _TK -> Maybe_Stmt {
@@ -1120,10 +1120,10 @@ func parser_stmts: _TK -> Maybe_Stmt {
             }
             return None_Stmt
         }
-        var tmp: Maybe_Stmt = ret
-        set ret = enseq (tmp,s)
+        var tmp: Maybe_Stmt = move ret
+        set ret = enseq (move tmp,move s)
     }
-    return ret
+    return move ret
 }
 
 func parser: () -> Maybe_Stmt {
@@ -1131,7 +1131,7 @@ func parser: () -> Maybe_Stmt {
     if not accept_err _TK_EOF {
         return None_Stmt
     }
-    return s
+    return move s
 }
 
 -------------------------------------------------------------------------------
@@ -1166,7 +1166,7 @@ func env_expr_to_type: (\List_Env,\Expr) -> Type {
     if e\.Expr_Var? {
         var id: _String = e\.Expr_Var!.2.Str!
         var tp: Maybe_Type = env_id_to_type (arg.1,id)
-        return tp.Some_Type!
+        return move tp.Some_Type!
     }
 
     if e\.Expr_Nat? {
@@ -1184,20 +1184,20 @@ func env_expr_to_type: (\List_Env,\Expr) -> Type {
                 }
 
                 var tp: Type = env_expr_to_type (arg.1, \cur\.Item_Expr!.1)
-                set ret\ = Item_Type (tp, $List_Type)
+                set ret\ = Item_Type (move tp, $List_Type)
                 set ret = \ret\.Item_Type!.2
 
                 set cur = \cur\.Item_Expr!.2
             }
         }
-        return Type_Tuple (False, l)
+        return Type_Tuple (False, move l)
     }
 
     if e\.Expr_Index? {
         var num: Int = e\.Expr_Index!.2.2.Num!
         var tp: Type = call env_expr_to_type (arg.1, \e\.Expr_Index!.1)
         if tp.Type_Nat? {
-            return tp
+            return move tp
         }
         call _assert 0
         --return clone tp\.Tuple_Type![num]
@@ -1583,7 +1583,7 @@ func t_parser_type: () -> () {
     {
         call open_inp _{"((),_char)"}
         var ret: Maybe_Type = call parser_type ()
-        var tup: (Bool,List_Type) = ret.Some_Type!.Type_Tuple!
+        var tup: (Bool,List_Type) = move ret.Some_Type!.Type_Tuple!
         var nat: _(char*) = tup.2.Item_Type!.2.Item_Type!.1.Type_Nat!.2.2.Str!
         var ok: Bool = tup.2.Item_Type!.2.Item_Type!.2.$List_Type?
         call _assert _(ok.sub && !strcmp(nat,"char"))
@@ -1593,7 +1593,7 @@ func t_parser_type: () -> () {
     {
         call open_inp _{"() -> ()"}
         var ret: Maybe_Type = call parser_type ()
-        var fun: (Bool,Type,Type) = ret.Some_Type!.Type_Func!
+        var fun: (Bool,Type,Type) = move ret.Some_Type!.Type_Func!
         var ok1: Bool = fun.2.Type_Unit?
         var ok2: Bool = fun.3.Type_Unit?
         call _assert _(ok1.sub && ok2.sub)
@@ -1662,7 +1662,7 @@ func t_parser_expr: () -> () {
         call open_inp _{"((),x,())"}
         var e: Maybe_Expr = call parser_expr False
         var ok: Bool = e.Some_Expr?
-        var tup: List_Expr = e.Some_Expr!.Expr_Tuple!
+        var tup: List_Expr = move e.Some_Expr!.Expr_Tuple!
         var ok2: Bool = tup.Item_Expr!.2.Item_Expr!.1.Expr_Var?
         call _assert _{ok.sub && ok2.sub}
         call close ()
@@ -1671,7 +1671,7 @@ func t_parser_expr: () -> () {
     {
         call open_inp _{"xxx ()"}
         var e: Maybe_Expr = call parser_expr True
-        var cal: (Expr,Expr) = e.Some_Expr!.Expr_Call!
+        var cal: (Expr,Expr) = move e.Some_Expr!.Expr_Call!
         var ok1: Bool = cal.1.Expr_Var?
         var ok2: Bool = cal.2.Expr_Unit?
         var str: _(char*) = cal.1.Expr_Var!.2.Str!
@@ -1681,7 +1681,7 @@ func t_parser_expr: () -> () {
     {
         call open_inp _{"call xxx ()"}
         var e: Maybe_Expr = call parser_expr True
-        var cal: (Expr,Expr) = e.Some_Expr!.Expr_Call!
+        var cal: (Expr,Expr) = move e.Some_Expr!.Expr_Call!
         var ok1: Bool = cal.1.Expr_Var?
         var ok2: Bool = cal.2.Expr_Unit?
         var str: _(char*) = cal.1.Expr_Var!.2.Str!
@@ -1691,7 +1691,7 @@ func t_parser_expr: () -> () {
     {
         call open_inp _{"f()\n()\n()"}
         var e: Maybe_Expr = call parser_expr True
-        var cal: (Expr,Expr) = e.Some_Expr!.Expr_Call!
+        var cal: (Expr,Expr) = move e.Some_Expr!.Expr_Call!
         var ok1: Bool = cal.1.Expr_Var?
         var ok2: Bool = cal.2.Expr_Unit?
         var str: _(char*) = cal.1.Expr_Var!.2.Str!
@@ -1702,7 +1702,7 @@ func t_parser_expr: () -> () {
     {
         call open_inp _{"True ()"}
         var e: Maybe_Expr = call parser_expr True
-        var cons: ((Int,TK_Val,Int,Int),Expr) = e.Some_Expr!.Expr_Cons!
+        var cons: ((Int,TK_Val,Int,Int),Expr) = move e.Some_Expr!.Expr_Cons!
         var str: _(char*) = cons.1.2.Str!
         var ok2: Bool = cons.2.Expr_Unit?
         call _assert _{ok2.sub && !strcmp(str,"True")}
@@ -1711,7 +1711,7 @@ func t_parser_expr: () -> () {
     {
         call open_inp _{"Zz1 ((),())"}
         var e: Maybe_Expr = call parser_expr True
-        var cons: ((Int,TK_Val,Int,Int),Expr) = e.Some_Expr!.Expr_Cons!
+        var cons: ((Int,TK_Val,Int,Int),Expr) = move e.Some_Expr!.Expr_Cons!
         var str: _(char*) = cons.1.2.Str!
         var ok2: Bool = cons.2.Expr_Tuple?
         call _assert _{ok2.sub && !strcmp(str,"Zz1")}
@@ -1721,7 +1721,7 @@ func t_parser_expr: () -> () {
     {
         call open_inp _{"x.1"}
         var e: Maybe_Expr = call parser_expr True
-        var idx: (Expr,(Int,TK_Val,Int,Int)) = e.Some_Expr!.Expr_Index!
+        var idx: (Expr,(Int,TK_Val,Int,Int)) = move e.Some_Expr!.Expr_Index!
         var str: _(char*) = idx.1.Expr_Var!.2.Str!
         var num: Int = idx.2.2.Num!
         call _assert _{num==1 && !strcmp(str,"x")}
@@ -1730,8 +1730,8 @@ func t_parser_expr: () -> () {
     {
         call open_inp _{"x () .10 ()"}  -- x [() .10 ~()~
         var e: Maybe_Expr = call parser_expr True
-        var cal: (Expr,Expr) = e.Some_Expr!.Expr_Call!
-        var idx: (Expr,(Int,TK_Val,Int,Int)) = cal.2.Expr_Index!
+        var cal: (Expr,Expr) = move e.Some_Expr!.Expr_Call!
+        var idx: (Expr,(Int,TK_Val,Int,Int)) = move cal.2.Expr_Index!
         var str: _(char*) = cal.1.Expr_Var!.2.Str!
         var ok: Bool = idx.1.Expr_Unit?
         var num: Int = idx.2.2.Num!
@@ -1749,8 +1749,8 @@ func t_parser_expr: () -> () {
     {
         call open_inp _{"x\\.1"}
         var e: Maybe_Expr = call parser_expr True
-        var idx: (Expr,(Int,TK_Val,Int,Int)) = e.Some_Expr!.Expr_Index!
-        var dn:  Expr = idx.1.Expr_Dnref!
+        var idx: (Expr,(Int,TK_Val,Int,Int)) = move e.Some_Expr!.Expr_Index!
+        var dn:  Expr = move idx.1.Expr_Dnref!
         var str: _(char*) = dn.Expr_Var!.2.Str!
         call _assert _{!strcmp(str,"x")}
         call close ()
@@ -1766,8 +1766,8 @@ func t_parser_expr: () -> () {
     {
         call open_inp _{"\\x.1"}
         var e: Maybe_Expr = call parser_expr True
-        var up: Expr = e.Some_Expr!.Expr_Upref!
-        var idx: (Expr,(Int,TK_Val,Int,Int)) = up.Expr_Index!
+        var up: Expr = move e.Some_Expr!.Expr_Upref!
+        var idx: (Expr,(Int,TK_Val,Int,Int)) = move up.Expr_Index!
         var str: _(char*) = idx.1.Expr_Var!.2.Str!
         call _assert _{!strcmp(str,"x")}
         call close ()
@@ -1807,7 +1807,7 @@ func t_parser_expr: () -> () {
     {
         call open_inp _{"x.Item!"}
         var e: Maybe_Expr = call parser_expr True
-        var disc: (Expr,(Int,TK_Val,Int,Int)) = e.Some_Expr!.Expr_Disc!
+        var disc: (Expr,(Int,TK_Val,Int,Int)) = move e.Some_Expr!.Expr_Disc!
         var ok1: Bool = disc.1.Expr_Var?
         var str: _(char*) = disc.2.2.Str!
         call _assert _{ok1.sub && !strcmp(str,"Item")}
@@ -1817,7 +1817,7 @@ func t_parser_expr: () -> () {
     {
         call open_inp _{"x.Item?"}
         var e: Maybe_Expr = call parser_expr True
-        var disc: (Expr,(Int,TK_Val,Int,Int)) = e.Some_Expr!.Expr_Pred!
+        var disc: (Expr,(Int,TK_Val,Int,Int)) = move e.Some_Expr!.Expr_Pred!
         var ok1: Bool = disc.1.Expr_Var?
         var str: _(char*) = disc.2.2.Str!
         call _assert _{ok1.sub && !strcmp(str,"Item")}
@@ -1841,17 +1841,17 @@ func t_parser_stmt: () -> () {
     {
         call open_inp _{"type Bool { False:() ; True:() }"}
         var s: Maybe_Stmt = call parser_stmt ()
-        var user: (Bool, (Int,TK_Val,Int,Int), List_Sub) = s.Some_Stmt!.Stmt_User!
+        var user: (Bool, (Int,TK_Val,Int,Int), List_Sub) = move s.Some_Stmt!.Stmt_User!
         var str: _(char*) = user.2.2.Str!
         var tru: _(char*) = user.3.Item_Sub!.2.Item_Sub!.1.1.2.Str!
-        call _assert _{!user._1.sub && !strcmp(str,"Bool") && !strcmp(tru,"True")}
+        call _assert _{!user->_1.sub && !strcmp(str,"Bool") && !strcmp(tru,"True")}
         call close ()
     }
     -- STMT_CALL
     {
         call open_inp _{"call f()"}
         var s: Maybe_Stmt = call parser_stmt ()
-        var cal: Expr = s.Some_Stmt!.Stmt_Call!
+        var cal: Expr = move s.Some_Stmt!.Stmt_Call!
         var ok: Bool = cal.Expr_Call?
         var ok1: Bool = cal.Expr_Call!.1.Expr_Var?
         var ok2: Bool = cal.Expr_Call!.2.Expr_Unit?
@@ -1861,7 +1861,7 @@ func t_parser_stmt: () -> () {
     {
         call open_inp _{"call _printf ()"}
         var s: Maybe_Stmt = call parser_stmt ()
-        var cal: Expr = s.Some_Stmt!.Stmt_Call!
+        var cal: Expr = move s.Some_Stmt!.Stmt_Call!
         var ok: Bool = cal.Expr_Call?
         var ok1: Bool = cal.Expr_Call!.1.Expr_Nat?
         var ok2: Bool = cal.Expr_Call!.2.Expr_Unit?
@@ -1872,23 +1872,23 @@ func t_parser_stmt: () -> () {
     {
         call open_inp _{"call f() ; call _printf () ; call g()"}
         var s: Maybe_Stmt = call parser_stmts _TK_EOF
-        var seq: (Stmt,Stmt) = s.Some_Stmt!.Stmt_Seq!
+        var seq: (Stmt,Stmt) = move s.Some_Stmt!.Stmt_Seq!
         {
-            var cal: Expr = seq.1.Stmt_Seq!.1.Stmt_Call!
+            var cal: Expr = move seq.1.Stmt_Seq!.1.Stmt_Call!
             var ok: Bool = cal.Expr_Call?
             var ok1: Bool = cal.Expr_Call!.1.Expr_Var?
             var ok2: Bool = cal.Expr_Call!.2.Expr_Unit?
             call _assert _{ok.sub && ok1.sub && ok2.sub}
         }
         {
-            var cal: Expr = seq.1.Stmt_Seq!.2.Stmt_Call!
+            var cal: Expr = move seq.1.Stmt_Seq!.2.Stmt_Call!
             var ok: Bool = cal.Expr_Call?
             var ok1: Bool = cal.Expr_Call!.1.Expr_Nat?
             var ok2: Bool = cal.Expr_Call!.2.Expr_Unit?
             call _assert _{ok.sub && ok1.sub && ok2.sub}
         }
         {
-            var cal: Expr = seq.2.Stmt_Call!
+            var cal: Expr = move seq.2.Stmt_Call!
             var ok: Bool = cal.Expr_Call?
             var ok1: Bool = cal.Expr_Call!.1.Expr_Var?
             var ok2: Bool = cal.Expr_Call!.2.Expr_Unit?
@@ -1900,7 +1900,7 @@ func t_parser_stmt: () -> () {
     {
         call open_inp _{"{ call f() }"}
         var s: Maybe_Stmt = call parser_stmt ()
-        var blk: Stmt = s.Some_Stmt!.Stmt_Block!
+        var blk: Stmt = move s.Some_Stmt!.Stmt_Block!
         var ok: Bool = blk.Stmt_Call?
         call _assert _{ok.sub}
         call close ()
@@ -1909,7 +1909,7 @@ func t_parser_stmt: () -> () {
     {
         call open_inp _{"if () {} else { call f() }"}
         var s: Maybe_Stmt = call parser_stmt ()
-        var if_: (Expr,Stmt,Stmt) = s.Some_Stmt!.Stmt_If!
+        var if_: (Expr,Stmt,Stmt) = move s.Some_Stmt!.Stmt_If!
         var ok: Bool = if_.1.Expr_Unit?
         var ok1: Bool = if_.2.Stmt_Block!.Stmt_Pass?
         var ok2: Bool = if_.3.Stmt_Block!.Stmt_Call?
@@ -1920,7 +1920,7 @@ func t_parser_stmt: () -> () {
     {
         call open_inp _{"func f : () -> () { return () }"}
         var s: Maybe_Stmt = call parser_stmt ()
-        var f: ((Int,TK_Val,Int,Int),Type,Maybe_Stmt) = s.Some_Stmt!.Stmt_Func!
+        var f: ((Int,TK_Val,Int,Int),Type,Maybe_Stmt) = move s.Some_Stmt!.Stmt_Func!
         var str: _(char*) = f.1.2.Str!
         var ok1: Bool = f.2.Type_Func?
         var ok2: Bool = f.3.Some_Stmt!.Stmt_Block!.Stmt_Ret?
@@ -1930,7 +1930,7 @@ func t_parser_stmt: () -> () {
     {
         call open_inp _{"func pre f : () -> ()"}
         var s: Maybe_Stmt = call parser_stmt ()
-        var f: ((Int,TK_Val,Int,Int),Type,Maybe_Stmt) = s.Some_Stmt!.Stmt_Func!
+        var f: ((Int,TK_Val,Int,Int),Type,Maybe_Stmt) = move s.Some_Stmt!.Stmt_Func!
         var str: _(char*) = f.1.2.Str!
         var ok1: Bool = f.2.Type_Func?
         var ok2: Bool = f.3.None_Stmt?
@@ -1951,7 +1951,7 @@ func t_parser_stmt: () -> () {
     {
         call open_inp _{"loop { break }"}
         var s: Maybe_Stmt = call parser_stmt ()
-        var lop: Stmt = s.Some_Stmt!.Stmt_Loop!
+        var lop: Stmt = move s.Some_Stmt!.Stmt_Loop!
         var ok: Bool = lop.Stmt_Block!.Stmt_Break?
         call _assert _{ok.sub}
         call close ()
@@ -1960,7 +1960,7 @@ func t_parser_stmt: () -> () {
     {
         call open_inp _{"set s = ()"}
         var s: Maybe_Stmt = call parser_stmt ()
-        var ss: (Expr,Expr) = s.Some_Stmt!.Stmt_Set!
+        var ss: (Expr,Expr) = move s.Some_Stmt!.Stmt_Set!
         var ok1: Bool = ss.1.Expr_Var?
         var ok2: Bool = ss.2.Expr_Unit?
         call _assert _{ok1.sub && ok2.sub}
@@ -2113,6 +2113,7 @@ call _assert 0
 
 call t_lexer  ()
 call t_parser_type ()
+call _assert 0  -- DAQUI PRA BAIXO NAO FUNCIONA
 call t_parser_expr ()
 call t_parser_stmt ()
 call t_code ()
