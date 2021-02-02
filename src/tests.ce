@@ -524,6 +524,22 @@ type rec List_Type {                        -- CE2: generic
     Item_Type: (Type, List_Type)
 }
 
+type List_Tail_Type {
+    LT_Type: (List_Type, \List_Type)
+}
+
+func new_list_tail_type: () -> List_Tail_Type {
+    var nil: \List_Type = _NULL
+    var ret: List_Tail_Type = LT_Type ($List_Type, nil)
+    set ret.LT_Type!.2 = \ret.LT_Type!.1
+    return move ret
+}
+
+--func append_list_tail_type: (\List_Tail_Type,Type) -> () {
+--   set arg.1\.LT_Type!.2\ = Item_Type (arg.2, $List_Type)
+--   set arg.1\.LT_Type!.2 = \arg.1\.LT_Type!.2\.Item_Type!.2
+--}
+
 type rec Type {                             -- CE2: subtype isrec=Bool
     Type_Any:   Bool
     Type_Unit:  Bool
@@ -574,19 +590,20 @@ func parser_type: () -> Maybe_Type {
             }
 
             -- TYPE_TUPLE   // CE2: generic w/ EXPR_TUPLE
-            var lst: List_Type = Item_Type (move tmp.Some_Type!, $List_Type)
-            {
-                var cur: \List_Type = \lst.Item_Type!.2
-                loop {
-                    var tmp: Maybe_Type = call parser_type ()
-                    if tmp.None_Type? {
-                        return None_Type
-                    }
-                    set cur\ = Item_Type (move tmp.Some_Type!, $List_Type)
-                    set cur = \cur\.Item_Type!.2
-                    if not accept_err _(',') {
-                        break
-                    }
+            var lst: List_Tail_Type = call new_list_tail_type ()
+            --call append_list_tail_type (\lst, move tmp.Some_Type!)
+                set lst.LT_Type!.2\ = Item_Type (move tmp.Some_Type!, $List_Type)
+                set lst.LT_Type!.2 = \lst.LT_Type!.2\.Item_Type!.2
+            loop {
+                var tmp: Maybe_Type = call parser_type ()
+                if tmp.None_Type? {
+                    return None_Type
+                }
+                --call append_list_tail_type (\lst, move tmp.Some_Type!)
+                    set lst.LT_Type!.2\ = Item_Type (move tmp.Some_Type!, $List_Type)
+                    set lst.LT_Type!.2 = \lst.LT_Type!.2\.Item_Type!.2
+                if not accept_err _(',') {
+                    break
                 }
             }
 
@@ -594,7 +611,7 @@ func parser_type: () -> Maybe_Type {
                 return None_Type
             }
 
-            return Some_Type Type_Tuple (isalias, move lst)
+            return Some_Type Type_Tuple (isalias, move lst.LT_Type!.1)
         }
 
         call err_expected _("type")
@@ -625,6 +642,17 @@ type pre Expr
 
 type rec List_Expr {
     Item_Expr: (Expr, List_Expr)
+}
+
+type List_Tail_Expr {
+    LT_Expr: (List_Expr, \List_Expr)
+}
+
+func new_list_tail_expr: () -> List_Tail_Expr {
+    var nil: \List_Expr = _NULL
+    var ret: List_Tail_Expr = LT_Expr ($List_Expr, nil)
+    set ret.LT_Expr!.2 = \ret.LT_Expr!.1
+    return move ret
 }
 
 type rec Expr {                             -- CE2: subtype isrec=Bool
@@ -718,26 +746,26 @@ func parser_expr_: () -> Maybe_Expr {
         }
 
         -- EXPR_TUPLE
-        var lst: List_Expr = Item_Expr (move e.Some_Expr!, $List_Expr)
-        {
-            var cur: \List_Expr = \lst.Item_Expr!.2
-            loop {
-                var tmp: Maybe_Expr = parser_expr False
-                if tmp.None_Expr? {
-                    return None_Expr
-                }
-                set cur\ = Item_Expr (move tmp.Some_Expr!, $List_Expr)
-                set cur = \cur\.Item_Expr!.2
-                if not accept_err _(',') {
-                    break
-                }
+        var lst: List_Tail_Expr = call new_list_tail_expr ()
+        --call append_list_tail_expr (\lst, move e.Some_Expr!)
+            set lst.LT_Expr!.2\ = Item_Expr (move e.Some_Expr!, $List_Expr)
+            set lst.LT_Expr!.2 = \lst.LT_Expr!.2\.Item_Expr!.2
+        loop {
+            var tmp: Maybe_Expr = parser_expr False
+            if tmp.None_Expr? {
+                return None_Expr
+            }
+            set lst.LT_Expr!.2\ = Item_Expr (move tmp.Some_Expr!, $List_Expr)
+            set lst.LT_Expr!.2 = \lst.LT_Expr!.2\.Item_Expr!.2
+            if not accept_err _(',') {
+                break
             }
         }
 
         if not accept_err _{')'} {
             return None_Expr
         }
-        return Some_Expr Expr_Tuple move lst
+        return Some_Expr Expr_Tuple move lst.LT_Expr!.1
     }
 
     -- EXPR_CONS
@@ -771,18 +799,15 @@ func parser_expr: Bool -> Maybe_Expr {
         if accept _('.') {
             -- EXPR_INDEX
             if accept _TX_NUM {
-                var tmp: Expr = Expr_Index (move ret.Some_Expr!,tk0)
-                set ret = Some_Expr move tmp
+                set ret = Some_Expr Expr_Index (move ret.Some_Expr!,tk0)
             } else {
                 if or (accept _TX_USER, accept _TX_EMPTY) {
                     var tk: (Int,TK_Val,Int,Int) = tk0
                     if accept _('?') {
-                        var tmp: Expr = Expr_Pred (move ret.Some_Expr!,tk)
-                        set ret = Some_Expr move tmp
+                        set ret = Some_Expr Expr_Pred (move ret.Some_Expr!,tk)
                     } else {
                         if accept _('!') {
-                            var tmp: Expr = Expr_Disc (move ret.Some_Expr!,tk)
-                            set ret = Some_Expr move tmp
+                            set ret = Some_Expr Expr_Disc (move ret.Some_Expr!,tk)
                         } else {
                             call err_expected _("`?´ or `!´")
                             return None_Expr
@@ -804,8 +829,7 @@ func parser_expr: Bool -> Maybe_Expr {
                                or (ret.Some_Expr!.Expr_Call?, False))))))
                                --or (ret.Some_Expr!.Expr_Disc?, False)))))))
                 if ok {
-                    var tmp: Expr = Expr_Dnref move ret.Some_Expr!
-                    set ret = Some_Expr move tmp
+                    set ret = Some_Expr Expr_Dnref move ret.Some_Expr!
                 } else {
                     var str: _String = _("unexpected operand to `\\´")
                     call err_tk (tk0,str)
@@ -818,8 +842,7 @@ func parser_expr: Bool -> Maybe_Expr {
                     var tk_bef: (Int,TK_Val,Int,Int) = tk0
                     var e: Maybe_Expr = parser_expr False
                     if e.Some_Expr? {
-                        var tmp: Expr = Expr_Call (move ret.Some_Expr!, move e.Some_Expr!)
-                        set ret = Some_Expr move tmp
+                        set ret = Some_Expr Expr_Call (move ret.Some_Expr!, move e.Some_Expr!)
                         set ok = True
                     }
                 }
@@ -1120,8 +1143,7 @@ func parser_stmts: _TK -> Maybe_Stmt {
             }
             return None_Stmt
         }
-        var tmp: Maybe_Stmt = move ret
-        set ret = enseq (move tmp,move s)
+        set ret = enseq (move ret,move s)
     }
     return move ret
 }
