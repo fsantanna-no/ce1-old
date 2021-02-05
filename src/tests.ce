@@ -535,9 +535,10 @@ func new_list_tail_type: () -> List_Tail_Type {
     return move ret
 }
 
+-- TODO: arg.2 was moved, but not arg.1
 --func append_list_tail_type: (\List_Tail_Type,Type) -> () {
---   set arg.1\.LT_Type!.2\ = Item_Type (arg.2, $List_Type)
---   set arg.1\.LT_Type!.2 = \arg.1\.LT_Type!.2\.Item_Type!.2
+-- set arg.1\.LT_Type!.2\ = Item_Type (move arg.2, $List_Type)
+-- set arg.1\.LT_Type!.2 = \arg.1\.LT_Type!.2\.Item_Type!.2
 --}
 
 type rec Type {                             -- CE2: subtype isrec=Bool
@@ -1230,6 +1231,40 @@ func env_expr_to_type: (\List_Env,\Expr) -> Type {
 
 -------------------------------------------------------------------------------
 
+type Visit {
+    Visit_Error:    ()
+    Visit_Continue: ()
+    Visit_Break:    ()
+}
+
+func visit_stmt: (\Stmt, \Stmt->Visit) -> Bool {
+    var s: \Stmt        = arg.1
+    var f: \Stmt->Visit = arg.2
+
+    var v: Visit = call f s
+    if v.Visit_Error? {
+        return False
+    }
+    if v.Visit_Break? {
+        return True
+    }
+
+    if s\.Stmt_Pass? {
+        return True
+    }
+    return True
+}
+
+-------------------------------------------------------------------------------
+
+func set_envs: \Stmt -> Bool {
+    func f: \Stmt -> Visit {
+        output std arg
+        return Visit_Continue
+    }
+    return visit_stmt (arg,f)
+}
+
 -------------------------------------------------------------------------------
 
 func out: _String -> () {
@@ -1334,7 +1369,8 @@ func code_stmt: \Stmt -> () {
         return ()
     }
     if arg\.Stmt_Call? {
-        --call code_expr (?, ?)
+        --call code_expr (arg\.Stmt_Call!.1, \arg\.Stmt_Call!.2)
+        --call code_expr (arg\.Stmt_Call!.1, \arg\.Stmt_Call!.3)
         call out _(";\n")
         return ()
     }
@@ -2084,13 +2120,15 @@ func t_code: () -> () {
         }
         call _assert _{!strcmp(out,xp)}
     }
-call _assert 0  -- DAQUI PRA BAIXO NAO FUNCIONA
+call _puts _("-=-=-=-=-")
     {
         native _{ char out[1024]; }
         var str: _String = _out
         call open (str,1024, asstring _("call _stdo a"))
         var s: Maybe_Stmt = parser_stmt ()
-        call code (\s.Some_Stmt!)
+        var ps: \Stmt = \s.Some_Stmt!
+        call set_envs ps
+        call code ps
         call close ()
         var xp: _String = _{
             "#include <assert.h>\n"
@@ -2107,6 +2145,7 @@ call _assert 0  -- DAQUI PRA BAIXO NAO FUNCIONA
         }
         call _assert _{!strcmp(out,xp)}
     }
+call _assert 0
     {
         native _{ char out[1024]; }
         var str: _String = _out
