@@ -524,22 +524,26 @@ type rec List_Type {                        -- CE2: generic
     Item_Type: (Type, List_Type)
 }
 
+type List_Type_Pointer {
+    Void_List_Type: ()
+    Ptr_List_Type: \List_Type
+}
+
 type List_Tail_Type {
-    LT_Type: (List_Type, \List_Type)
+    LT_Type: (List_Type, List_Type_Pointer)
 }
 
 func new_list_tail_type: () -> List_Tail_Type {
-    var nil: \List_Type = _NULL
-    var ret: List_Tail_Type = LT_Type ($List_Type, nil)
-    set ret.LT_Type!.2 = \ret.LT_Type!.1
+    var ret: List_Tail_Type = LT_Type ($List_Type, Void_List_Type)
+    set ret.LT_Type!.2 = Ptr_List_Type (\ret.LT_Type!.1)
     return move ret
 }
 
 -- TODO: arg.2 was moved, but not arg.1
---func append_list_tail_type: (\List_Tail_Type,Type) -> () {
--- set arg.1\.LT_Type!.2\ = Item_Type (move arg.2, $List_Type)
--- set arg.1\.LT_Type!.2 = \arg.1\.LT_Type!.2\.Item_Type!.2
---}
+func append_list_tail_type: (\List_Tail_Type,Type) -> () {
+    set arg.1\.LT_Type!.2.Ptr_List_Type!\ = Item_Type (move arg.2, $List_Type)
+    set arg.1\.LT_Type!.2 = Ptr_List_Type (\arg.1\.LT_Type!.2.Ptr_List_Type!\.Item_Type!.2)
+}
 
 type rec Type {                             -- CE2: subtype isrec=Bool
     Type_Any:   Bool
@@ -593,16 +597,16 @@ func parser_type: () -> Maybe_Type {
             -- TYPE_TUPLE   // CE2: generic w/ EXPR_TUPLE
             var lst: List_Tail_Type = call new_list_tail_type ()
             --call append_list_tail_type (\lst, move tmp.Some_Type!)
-                set lst.LT_Type!.2\ = Item_Type (move tmp.Some_Type!, $List_Type)
-                set lst.LT_Type!.2 = \lst.LT_Type!.2\.Item_Type!.2
+                set lst.LT_Type!.2.Ptr_List_Type!\ = Item_Type (move tmp.Some_Type!, $List_Type)
+                set lst.LT_Type!.2 = Ptr_List_Type (\lst.LT_Type!.2.Ptr_List_Type!\.Item_Type!.2)
             loop {
                 var tmp: Maybe_Type = call parser_type ()
                 if tmp.None_Type? {
                     return None_Type
                 }
                 --call append_list_tail_type (\lst, move tmp.Some_Type!)
-                    set lst.LT_Type!.2\ = Item_Type (move tmp.Some_Type!, $List_Type)
-                    set lst.LT_Type!.2 = \lst.LT_Type!.2\.Item_Type!.2
+                    set lst.LT_Type!.2.Ptr_List_Type!\ = Item_Type (move tmp.Some_Type!, $List_Type)
+                    set lst.LT_Type!.2 = Ptr_List_Type (\lst.LT_Type!.2.Ptr_List_Type!\.Item_Type!.2)
                 if not accept_err _(',') {
                     break
                 }
@@ -645,14 +649,18 @@ type rec List_Expr {
     Item_Expr: (Expr, List_Expr)
 }
 
+type List_Expr_Pointer {
+    Void_List_Expr: ()
+    Ptr_List_Expr: \List_Expr
+}
+
 type List_Tail_Expr {
-    LT_Expr: (List_Expr, \List_Expr)
+    LT_Expr: (List_Expr, List_Expr_Pointer)
 }
 
 func new_list_tail_expr: () -> List_Tail_Expr {
-    var nil: \List_Expr = _NULL
-    var ret: List_Tail_Expr = LT_Expr ($List_Expr, nil)
-    set ret.LT_Expr!.2 = \ret.LT_Expr!.1
+    var ret: List_Tail_Expr = LT_Expr ($List_Expr, Void_List_Expr)
+    set ret.LT_Expr!.2 = Ptr_List_Expr (\ret.LT_Expr!.1)
     return move ret
 }
 
@@ -749,15 +757,15 @@ func parser_expr_: () -> Maybe_Expr {
         -- EXPR_TUPLE
         var lst: List_Tail_Expr = call new_list_tail_expr ()
         --call append_list_tail_expr (\lst, move e.Some_Expr!)
-            set lst.LT_Expr!.2\ = Item_Expr (move e.Some_Expr!, $List_Expr)
-            set lst.LT_Expr!.2 = \lst.LT_Expr!.2\.Item_Expr!.2
+            set lst.LT_Expr!.2.Ptr_List_Expr!\ = Item_Expr (move e.Some_Expr!, $List_Expr)
+            set lst.LT_Expr!.2 = Ptr_List_Expr (\lst.LT_Expr!.2.Ptr_List_Expr!\.Item_Expr!.2)
         loop {
             var tmp: Maybe_Expr = parser_expr False
             if tmp.None_Expr? {
                 return None_Expr
             }
-            set lst.LT_Expr!.2\ = Item_Expr (move tmp.Some_Expr!, $List_Expr)
-            set lst.LT_Expr!.2 = \lst.LT_Expr!.2\.Item_Expr!.2
+            set lst.LT_Expr!.2.Ptr_List_Expr!\ = Item_Expr (move tmp.Some_Expr!, $List_Expr)
+            set lst.LT_Expr!.2 = Ptr_List_Expr (\lst.LT_Expr!.2.Ptr_List_Expr!\.Item_Expr!.2)
             if not accept_err _(',') {
                 break
             }
@@ -900,6 +908,7 @@ func pre parser_stmts: _TK -> Maybe_Stmt
 
 func parser_stmt: () -> Maybe_Stmt {
     --var tk_pre: (Int,TK_Val,Int,Int) = tk0
+    --var up: \Stmt = arg
 
     func parser_block: () -> Maybe_Stmt {
         if not accept_err _('{') {
@@ -1257,7 +1266,7 @@ func visit_stmt: (\Stmt, \Stmt->Visit) -> Bool {
 
 -------------------------------------------------------------------------------
 
-func set_envs: \Stmt -> Bool {
+func set_ups: \Stmt -> Bool {
     func f: \Stmt -> Visit {
         output std arg
         return Visit_Continue
@@ -2093,7 +2102,7 @@ func t_code: () -> () {
         native _{ char out[256]; }
         var str: _String = _out
         call open_out (str,256)
-        var s: Stmt = Stmt_Pass
+        var s: Stmt = Stmt_Pass _NULL
         call code_stmt (\s)
         call close ()
         call _assert _{!strcmp(out,"")}
@@ -2103,7 +2112,7 @@ func t_code: () -> () {
         native _{ char out[1024]; }
         var str: _String = _out
         call open_out (str,1024)
-        var s: Stmt = Stmt_Pass
+        var s: Stmt = Stmt_Pass _NULL
         call code (\s)
         call close ()
         var xp: _String = _{
@@ -2127,7 +2136,7 @@ call _puts _("-=-=-=-=-")
         call open (str,1024, asstring _("call _stdo a"))
         var s: Maybe_Stmt = parser_stmt ()
         var ps: \Stmt = \s.Some_Stmt!
-        call set_envs ps
+        call set_ups ps
         call code ps
         call close ()
         var xp: _String = _{
